@@ -279,6 +279,69 @@ Este principio aplica a TODAS las decisiones del proyecto:
 
 ---
 
+## REGLA #13: DOCUMENTACIÓN AUTOMÁTICA EN CADA CAMBIO (NUEVO — Abril 1, 2026)
+
+> **Origen**: Auditoría reveló 10+ features implementadas sin documentar en SRS/SDD — colecciones Firestore no documentadas, pantallas no documentadas, flujos no documentados. El gap código↔documentación crece silenciosamente cada iteración con Gemini.
+
+**OBLIGACIÓN de Copilot DESPUÉS de cada ronda de Gemini**:
+
+1. **Identificar** qué cambió en el código (archivos modificados, funcionalidad nueva/cambiada)
+2. **Cruzar** contra SRS.md y SDD.md — ¿el cambio ya está documentado?
+3. **Si NO está documentado** → Actualizar el documento correspondiente INMEDIATAMENTE:
+   - Feature nueva → SRS.md (requisito) + SDD.md (diseño técnico)
+   - Colección Firestore nueva → SDD.md §Schema
+   - Pantalla/Activity nueva → SDD.md §Interfaces
+   - Endpoint HTTP nuevo → SDD.md §API
+   - Cambio de arquitectura → SDD.md §Architecture
+4. **Confirmar** en el reporte post-Gemini: "Documentación actualizada: [lista de secciones]"
+
+**Checklist post-implementación**:
+- [ ] ¿Se agregó colección/subcollection Firestore? → Actualizar SDD §Schema
+- [ ] ¿Se creó Activity/Fragment nueva? → Actualizar SDD §Interfaces
+- [ ] ¿Se cambió flujo de navegación? → Actualizar SDD §Navigation
+- [ ] ¿Se agregó feature funcional? → Actualizar SRS §Requirements
+- [ ] ¿Se cambió endpoint HTTP? → Actualizar SDD §API
+- [ ] ¿Se agregó model/data class? → Actualizar SDD §Models
+
+**Principio**: Ningún commit ni reporte de Gemini se considera completo si la documentación no está al día.
+
+---
+
+## REGLA #14: GESTIÓN DE GIT — COPILOT ES RESPONSABLE (NUEVO — Abril 1, 2026)
+
+**Repositorio**: `git@github.com:za17400003/MonitorDeCuidados.git`
+
+### 🔴 REGLA ABSOLUTA: NO SE SUBE NADA A GIT SIN AUTORIZACIÓN EXPRESA DEL USUARIO
+
+**Copilot PUEDE hacer sin pedir permiso**:
+- `git add` (staging)
+- `git commit` (commits locales)
+- `git status`, `git log`, `git diff` (consultas)
+- `git branch`, `git checkout` (ramas locales)
+- `git stash` (guardar cambios temporalmente)
+
+**Copilot DEBE pedir permiso ANTES de**:
+- `git push` (cualquier variante — SIEMPRE requiere autorización)
+- `git push --force` (PROHIBIDO sin autorización + confirmación doble)
+- `git reset --hard` (destructivo)
+- `git branch -D` (eliminar ramas)
+
+**Workflow de Git**:
+1. Después de cada ronda de Gemini verificada → `git add` + `git commit` con mensaje descriptivo
+2. Acumular commits locales
+3. Cuando usuario autorice → `git push origin <branch>`
+4. Antes de push: confirmar rama y resumen de commits al usuario
+
+**Convención de commits**:
+- `feat: <descripción>` — feature nueva
+- `fix: <descripción>` — bug fix
+- `docs: <descripción>` — actualización de documentación
+- `refactor: <descripción>` — refactor sin cambio funcional
+- `chore: <descripción>` — mantenimiento (dead code, configs)
+- `style: <descripción>` — cambios de formato/estilo
+
+---
+
 ## REGLA #10: ANTICIPACIÓN DE DAÑO COLATERAL (NUEVO — Marzo 31, 2026)
 
 > **Origen**: Gemini cambió el overlay del QR scanner de cuadrado (`qr_scanning_rect`) a `ic_launcher_background` (círculo) cuando SOLO se le pidió corregir la detección. También cambió el tamaño/posición de elementos en layout_lockscreen cuando SOLO se pidió cambiar colores. Cada instrucción que NO blinda explícitamente los elementos existentes es una invitación para que Gemini los modifique libremente.

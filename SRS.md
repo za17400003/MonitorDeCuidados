@@ -124,19 +124,19 @@
 | 21 | Alarms System (Terminal-created schedules) | ✅ YES | ✅ YES | [Alarm entity, AlarmAdapter, CreateAlarmDialog.kt] |
 | 22 | Custom Phrases (Voice commands + auto-mapping) | ✅ YES | ✅ YES | [CustomPhrasesManager.kt] - Auto-add Monitor name |
 | 23 | Alert Log (Monitor notification history) | ✅ YES | ✅ YES | [AlertLogActivity.kt] - Historical view |
-| 24 | Remote Notifications (Firebase CloudMessaging) | ✅ YES | ❌ MISSING | NOT FOUND - **CHECK IF NEEDED OR FALLBACK TO FIRESTORE** |
+| 24 | Remote Notifications (Firebase CloudMessaging) | ✅ YES | ✅ YES | [FCMService.kt] - Registra FCM token en Firestore `/users/{userId}` field `fcmToken`. Recibe push notifications. Implementado. |
 | 25 | Language Auto-detection (device locale) | ✅ YES | ⚠️ Partial | SplashActivity.kt - Needs comprehensive locale fallback |
 | 26 | Battery Low Notification (Terminal → Monitor) | ✅ YES | ❌ MISSING | **NEW PHASE 7** - Terminal detects low battery (≤15%) and sends alert to Monitor |
 
 ---
 
 **Summary**:
-- ✅ **17 FULLY IMPLEMENTED** - Core working features
+- ✅ **18 FULLY IMPLEMENTED** - Core working features
 - ⚠️ **5 PARTIALLY IMPLEMENTED** - Need fixes/extensions  
-- ❌ **3 MISSING** - Must be implemented before release
+- ❌ **2 MISSING** - Must be implemented before release
 - ℹ️ **1 OPTIONAL** - Geriatric assessment can be skipped by user
 
-**BEFORE RELEASE**: ❌ Items 13, 24, 26 MUST be completed if needed. Multiidioma MUST cover all screens.
+**BEFORE RELEASE**: ❌ Items 13, 26 MUST be completed. Multiidioma MUST cover all screens.
 
 ---
 

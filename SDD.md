@@ -1,23 +1,26 @@
 # 🛠️ DOCUMENTACIÓN TÉCNICA v3.0 - Monitor de Cuidados
 
-**Última actualización**: Marzo 30, 2026  
-**Versión**: 3.0 (Overhaul: Contradicciones corregidas, Monetización, Interfaces faltantes, Event types canónicos)  
-**Estado**: Arquitectura Completa - Sincronizado con SRS v3.0
+**Última actualización**: Abril 1, 2026  
+**Versión**: 3.1 (Auditoría: Sincronización código↔docs, schema Firestore completo, arquitectura single-APK, walkie-talkie corregido)  
+**Estado**: Arquitectura Completa - Sincronizado con SRS v3.1
 
 ---
 
 ## 🏗️ ARQUITECTURA DEL SISTEMA
 
 ### Capa de Aplicación
-- **Monitor App (`:app`)**: Gestiona la lógica de supervisión, alertas y visualización de video.
-- **Terminal App (`campana/`)**: Proyecto independiente optimizado para dispositivos de bajo recurso en el hogar.
+- **App Única (`:app`) — Dual-Role**: Una sola APK con dos modalidades seleccionables al inicio:
+  - **Modo Monitor (Cuidador)**: Gestiona la supervisión, alertas, visualización de video, control remoto de switches del Terminal.
+  - **Modo Terminal (Persona Cuidada)**: Ejecuta CampanaService (detección de campana, voz, agitación), muestra QR para vinculación, overlay de campana en lockscreen.
+- **Selección de rol**: En onboarding (primera vez) o RoleSelectorActivity (cambio posterior). Se guarda en SharedPreferences como `app_mode` = "monitor" | "terminal".
+- **Navegación por rol**: SplashActivity lee `app_mode` y redirige a MonitorMainActivity o TerminalMainActivity.
 
 ### Capa de Comunicación (Protocolos)
 - **Networking Local**: Uso de `NanoHTTPD` para servidores HTTP integrados en ambos dispositivos.
   - Puerto 8080: Comandos de control (JSON).
   - Puerto 9001: Streaming de video (UDP/Datagram).
   - Puerto 9000: Streaming de audio (UDP).
-- **Descubrimiento de Dispositivos**: Implementación de `jMDNS` para detectar el Terminal en la red local automáticamente (`_monitor._tcp.local`).
+- **Descubrimiento de Dispositivos**: Implementación de `jMDNS` para detectar el Terminal en la red local automáticamente (`_caremonitor._tcp.local`).
 
 ### Capa de Datos (Persistencia Segura)
 - **Base de Datos Local**: Room Persistence Library con cifrado **SQLCipher (AES-256)**.
@@ -197,7 +200,14 @@ service cloud.firestore {
 }
 ```
 
-**Firestore Collections (8 total)**: `users`, `pairings`, `connection_logs`, `call_history`, `capabilities_assessments`, `notifications_history`, `localization` (6 docs: es/en/fr/pt/de/it), `usage_analytics`.
+**Firestore Collections (8 root + 4 subcollections)**:
+- **Root**: `users`, `pairings`, `connection_logs`, `call_history`, `capabilities_assessments`, `notifications_history`, `localization` (6 docs: es/en/fr/pt/de/it), `usage_analytics`.
+- **Subcollections de `/users/{userId}/`**:
+  - `events` — eventos sincronizados (SyncManager)
+  - `alarms` — alarmas sincronizadas (SyncManager)
+  - `custom_phrases` — frases personalizadas (SyncManager + CustomPhrasesManager)
+  - `config` — configuración sincronizada (SyncManager)
+  - `capabilities_assessment/latest` — última evaluación geriátrica (CapabilitiesAssessmentActivity)
 
 ---
 
@@ -940,8 +950,8 @@ SplashActivity (⏱️ dinámica) → LanguageSelectorActivity → LoginActivity
 
 **Flow Descripción**:
 - Usuario toca **#1.1** (Hamburguesa) → Abre drawer **#2.4**
-- Usuario toca **#2.2.2** (Llamar) → Inicia llamada de voz bidireccional con Terminal EN LA MISMA INTERFAZ (sin abrir VideoActivity). Terminal ACEPTA automáticamente. Botón cambia a "Colgar".
-- Usuario toca **#2.2.3** (Monitorear) → Abre VideoActivity mostrando video en vivo (cámara frontal Terminal por defecto) + audio en tiempo real (modo SILENT por default). Monitor NO envía su video.
+- ⚠️ **NOTA (Abril 1, 2026)**: Los botones `btnCall` y `btnMonitorVideo` documentados aquí **NO EXISTEN** en `layout_monitor_content.xml`. La funcionalidad de Llamar y Monitorear se accede desde **TerminalDetailActivity** (Interface #2.5) después de seleccionar un terminal de la lista. El Dashboard solo muestra la lista de terminales + alertas activas + botón para vincular nuevos terminales via QR.
+- Usuario toca un terminal en **rvTerminals** → Abre TerminalDetailActivity → desde ahí puede Llamar o Monitorear.
 - Usuario toca **#2.3** header → Expande notificaciones de campanadas y voz detectada
 - Usuario toca **#2.3.3** (Limpiar) → Limpia eventos acumulados de ambas categorías
 - Usuario toca **#2.4.2** (QR) → QRScannerActivity
@@ -1003,10 +1013,11 @@ SplashActivity (⏱️ dinámica) → LanguageSelectorActivity → LoginActivity
 
 **Flujo de Interacción**:
 - Dashboard → tap terminal card → Intent con extras (terminal_name, terminal_status)
-- "Llamar" → VideoActivity con mode="audiocall"
-- "Monitorear" → VideoActivity con mode="monitor"
+- "Llamar" → ⚠️ **ACTUALMENTE**: Abre VideoActivity con mode="audiocall" — **DEBE CORREGIRSE** per SRS: walkie-talkie in-place, NO abrir VideoActivity. Botón debe cambiar a "Colgar" en la MISMA interfaz.
+- "Monitorear" → VideoActivity con mode="monitor" + remote_ip (✅ correcto)
 - Switch toggle → HTTP POST `http://<ip>:8080/command` con `{"command":"SET_*_ON/OFF"}`
 - Terminal CampanaService.onCommandReceived → actualiza SharedPrefs + REFRESH_SERVICES
+- Polling cada 5s: GET `http://<ip>:8080/status` → actualiza switches, batería, estado (T43)
 - Back arrow → finish() → regresa a Dashboard
 
 **Archivos involucrados**: TerminalDetailActivity.kt, activity_terminal_detail.xml, TerminalStatusAdapter.kt (click callback), DashboardFragment.kt (launch intent), CampanaService.kt (onCommandReceived)
@@ -1938,12 +1949,59 @@ val closeButton = ImageButton(context).apply {
 
 ---
 
+## � FEATURES IMPLEMENTADAS NO DOCUMENTADAS PREVIAMENTE (Auditoría Abril 1, 2026)
+
+> **Origen**: Auditoría código↔documentación reveló features que existían en código pero no en SDD/SRS.
+
+### FCMService — Firebase Cloud Messaging
+- **Archivo**: `services/FCMService.kt`
+- **Función**: Extiende `FirebaseMessagingService`. En `onNewToken()`, registra el FCM token en Firestore (`/users/{userId}` campo `fcmToken`).
+- **Estado**: Implementado. SRS actualizado (Item #24 ✅).
+
+### Terminal Status Polling (T43)
+- **Archivo**: `TerminalDetailActivity.kt`
+- **Función**: Cada 5 segundos hace GET a `http://<ip>:8080/status` para obtener estado actual del terminal (batería, switches habilitados, estado de conexión). Actualiza la UI con flag `isUpdatingFromServer` para evitar que listeners de switches disparen comandos HTTP durante actualización server-driven.
+- **Estado**: Implementado y verificado.
+
+### Dashboard queryTerminalStatuses()
+- **Archivo**: `fragments/DashboardFragment.kt`
+- **Función**: Al listar terminales, hace polling HTTP a cada terminal para obtener batería y estado real. Actualiza `TerminalStatusAdapter` en tiempo real.
+- **Estado**: Implementado.
+
+### BellActivity — Incoming Call/Monitor Handler
+- **Archivo**: `BellActivity.kt`
+- **Layout**: `layout_lockscreen.xml`
+- **Función**: Overlay sobre pantalla de bloqueo. Campana animada para persona mayor. Maneja incoming calls/monitors (botones de aceptar/rechazar). Usa `WindowManager` con flags de lockscreen.
+- **Estado**: Implementado. Documentado en Interface #4.
+
+### VideoActivity Gesture Controls
+- **Archivo**: `VideoActivity.kt` (líneas 261-277)
+- **Función**: Fling vertical en `viewRemoteVideo`: swipe UP oculta barra de controles (`llControls → GONE`), swipe DOWN la muestra (`llControls → VISIBLE`). Threshold 100px. Solo vertical.
+- **Propósito**: UX — permite ver video fullscreen sin controles estorbando.
+- **Estado**: Implementado, ahora documentado.
+
+### CustomPhrasesManager
+- **Archivo**: `managers/CustomPhrasesManager.kt`
+- **Función**: Gestiona frases personalizadas para reconocimiento de voz (ML Kit). Auto-agrega nombre del Monitor como frase reconocible. Sincroniza con Firestore subcollection `/users/{userId}/custom_phrases`.
+- **Estado**: Implementado, ahora documentado.
+
+### SyncManager — Sincronización Bidireccional
+- **Archivo**: `sync/SyncManager.kt`
+- **Función**: Sincroniza datos locales (Room) con Firestore subcollections bajo `/users/{userId}/`:
+  - `events` — eventos de alertas
+  - `alarms` — alarmas programadas
+  - `custom_phrases` — frases personalizadas
+  - `config` — configuración del dispositivo
+- **Estado**: Implementado, subcollections ahora documentadas en Schema.
+
+---
+
 ## 🔗 VÍNCULOS A ESPECIFICACIONES
 
-- **SRS.md (v2.2)**: Define funcionalidades y requisitos de usuario (estado: ✅ Sincronizado)
-- **PLAN_MIGRACION_SEGURIDAD.md (v2.2)**: Detalla medidas de seguridad (estado: ✅ Sincronizado)
-- **TESTING_CHECKLISTS.md (v2.2)**: Casos de prueba críticos (estado: ✅ Sincronizado)
+- **SRS.md (v3.1)**: Define funcionalidades y requisitos de usuario (estado: ✅ Sincronizado Abril 1)
+- **PLAN_MIGRACION_SEGURIDAD.md (v2.2)**: Detalla medidas de seguridad (estado: ⚠️ Pendiente sync)
+- **TESTING_CHECKLISTS.md (v2.2)**: Casos de prueba críticos (estado: ⚠️ Pendiente sync)
 - **WorkItems.md**: Seguimiento de implementación (estado: ✅ Listo para Gemini)
 
 ---
-**Monitor de Cuidados - Documento Técnico v2.2**
+**Monitor de Cuidados - Documento Técnico v3.1**
