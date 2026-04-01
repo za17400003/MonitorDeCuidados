@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/spacing_xl"
+    android:gravity="center"
+    android:background="@color/surface">
+
+    <TextView
+        android:id="@+id/tvCalibrationTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Calibración de Voz"
+        android:textSize="@dimen/text_section_header"
+        android:textStyle="bold"
+        android:textColor="@color/text_primary"
+        android:layout_marginBottom="@dimen/spacing_lg" />
+
+    <TextView
+        android:id="@+id/tvCalibrationInstruction"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Por favor, di la palabra claramente:"
+        android:textAlignment="center"
+        android:textSize="@dimen/text_body"
+        android:textColor="@color/text_secondary"
+        android:layout_marginBottom="@dimen/spacing_sm" />
+
+    <TextView
+        android:id="@+id/tvCalibrationWord"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="AUXILIO"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:textColor="@color/primary"
+        android:layout_marginBottom="@dimen/spacing_xl" />
+
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/progressCalibration"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/spacing_xl"
+        app:indicatorColor="@color/primary" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btnRecordCalibration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:srcCompat="@drawable/ic_microphone"
+        app:backgroundTint="@color/primary"
+        app:tint="@color/white"
+        android:contentDescription="Grabar calibración" />
+
+    <TextView
+        android:id="@+id/tvCalibrationStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Toca el micrófono para empezar"
+        android:layout_marginTop="@dimen/spacing_lg"
+        android:textSize="@dimen/text_label"
+        android:textColor="@color/text_secondary" />
+
+</LinearLayout>

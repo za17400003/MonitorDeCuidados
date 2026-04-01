@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TOUCH TARGETS v2.0 (Geriátrico) -->
+    <dimen name="touch_target_primary">72dp</dimen>       <!-- Campana, LLAMAR -->
+    <dimen name="touch_target_secondary">56dp</dimen>     <!-- Config, Video, Log -->
+    <dimen name="touch_target_icon">48dp</dimen>          <!-- Drawer toggle, back -->
+    <dimen name="touch_target_list_item">56dp</dimen>     <!-- Items en listas -->
+    <dimen name="touch_target_tab">56dp</dimen>           <!-- Bottom nav tabs -->
+    <dimen name="touch_target_fab">72dp</dimen>           <!-- FAB -->
+    <dimen name="touch_target_toggle">56dp</dimen>        <!-- Switch height area -->
+
+    <!-- TERMINAL SPECIFIC -->
+    <dimen name="bell_button_size">160dp</dimen>          <!-- Botón campana gigante -->
+    <dimen name="bell_icon_size">64dp</dimen>             <!-- Ícono dentro de campana -->
+    <dimen name="terminal_status_bar_height">56dp</dimen>
+    <dimen name="terminal_info_strip_height">48dp</dimen>
+    <dimen name="terminal_settings_icon">56dp</dimen>
+
+    <!-- TYPOGRAPHY v2.0 (Geriátrico) — en sp para font scaling -->
+    <dimen name="text_screen_header">28sp</dimen>         <!-- Headers de pantalla -->
+    <dimen name="text_section_header">24sp</dimen>        <!-- Headers de sección -->
+    <dimen name="text_body">18sp</dimen>                  <!-- Body text -->
+    <dimen name="text_button_primary">20sp</dimen>        <!-- Botones primarios -->
+    <dimen name="text_button_secondary">18sp</dimen>      <!-- Botones secundarios -->
+    <dimen name="text_label">16sp</dimen>                 <!-- Labels, hints -->
+    <dimen name="text_timestamp">16sp</dimen>             <!-- Timestamps -->
+    <dimen name="text_badge">14sp</dimen>                 <!-- Badges, contadores -->
+    <dimen name="text_bell_label">20sp</dimen>            <!-- "Tocar para pedir ayuda" -->
+    <dimen name="text_app_name">18sp</dimen>              <!-- Nombre app decorativo -->
+
+    <!-- ICONS -->
+    <dimen name="icon_primary">32dp</dimen>               <!-- Íconos principales -->
+    <dimen name="icon_secondary">24dp</dimen>             <!-- Íconos secundarios -->
+    <dimen name="icon_small">16dp</dimen>                 <!-- Íconos status -->
+
+    <!-- SPACING -->
+    <dimen name="spacing_xs">4dp</dimen>
+    <dimen name="spacing_sm">8dp</dimen>
+    <dimen name="spacing_md">12dp</dimen>
+    <dimen name="spacing_lg">16dp</dimen>
+    <dimen name="spacing_xl">24dp</dimen>
+
+    <!-- CARDS -->
+    <dimen name="card_corner_radius">12dp</dimen>
+    <dimen name="card_elevation">4dp</dimen>
+    <dimen name="card_padding">16dp</dimen>
+    <dimen name="alert_card_min_height">72dp</dimen>
+    <dimen name="terminal_status_card_height">56dp</dimen>
+
+    <!-- BOTTOM NAV -->
+    <dimen name="bottom_nav_height">56dp</dimen>
+
+    <!-- FOCUS INDICATOR (Accessibility) -->
+    <dimen name="focus_indicator_width">2dp</dimen>
+</resources>

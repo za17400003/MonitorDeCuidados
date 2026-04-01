@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "843021848225",
+    "project_id": "monitordecuidados",
+    "storage_bucket": "monitordecuidados.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:843021848225:android:e21e44aea676a950056ae0",
+        "android_client_info": {
+          "package_name": "com.example.monitordecuidados"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzrrNv9K2Ayw5-lRkuiFXZAgt5hPCQYY0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

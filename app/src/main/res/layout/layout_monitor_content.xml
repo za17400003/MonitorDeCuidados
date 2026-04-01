@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_lg">
+
+        <!-- SECCIÓN: ALERTAS ACTIVAS -->
+        <TextView
+            android:id="@+id/tvAlertsHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/monitor_active_alerts"
+            android:textSize="@dimen/text_section_header"
+            android:textColor="@color/text_primary"
+            android:textStyle="bold"
+            android:drawableStart="@drawable/ic_notification_bell"
+            android:drawablePadding="@dimen/spacing_sm"
+            android:layout_marginBottom="@dimen/spacing_md"/>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvActiveAlerts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false"
+            tools:listitem="@layout/item_alert_campana"/>
+
+        <TextView
+            android:id="@+id/tvNoAlerts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/monitor_no_alerts"
+            android:textSize="@dimen/text_body"
+            android:textColor="@color/text_hint"
+            android:gravity="center"
+            android:padding="@dimen/spacing_xl"
+            android:visibility="gone"/>
+
+        <!-- SECCIÓN: MIS TERMINALES -->
+        <TextView
+            android:id="@+id/tvTerminalsHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/monitor_my_terminals"
+            android:textSize="@dimen/text_section_header"
+            android:textColor="@color/text_primary"
+            android:textStyle="bold"
+            android:layout_marginTop="@dimen/spacing_xl"
+            android:layout_marginBottom="@dimen/spacing_md"/>
+
+        <!-- VINCULAR TERMINAL — ENCIMA de la lista -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnLinkTerminal"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/touch_target_secondary"
+            android:text="@string/monitor_link_terminal"
+            android:textSize="@dimen/text_button_secondary"
+            app:icon="@drawable/ic_qrcode"
+            app:iconGravity="textStart"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_marginBottom="@dimen/spacing_md"
+            android:contentDescription="@string/cd_scan_qr_button"/>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvTerminals"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false"/>
+
+        <TextView
+            android:id="@+id/tvNoTerminals"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/monitor_no_terminals"
+            android:textSize="@dimen/text_body"
+            android:textColor="@color/text_hint"
+            android:gravity="center"
+            android:padding="@dimen/spacing_xl"
+            android:visibility="gone"/>
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

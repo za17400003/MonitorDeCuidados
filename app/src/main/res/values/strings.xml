@@ -1,0 +1,207 @@
+<resources>
+    <string name="app_name">Monitor de cuidados</string>
+    <string name="connection_online">En línea</string>
+    <string name="connection_offline">Desconectado</string>
+    <string name="next">Siguiente</string>
+    <string name="success">Éxito</string>
+    <string name="error_connection">Error de conexión</string>
+    <string name="fill_all_fields">Por favor, rellene todos los campos</string>
+    <string name="passwords_dont_match">Las contraseñas no coinciden</string>
+    <string name="no_terminal_linked">No hay terminal vinculado</string>
+    <string name="default_web_client_id" translatable="false">YOUR_CLIENT_ID_HERE</string>
+
+    <!-- Calibration Strings -->
+    <string name="calibration_mic_start">Hable ahora para calibrar el micrófono...</string>
+    <string name="ready_done">¡Listo!</string>
+    <string name="calibration_success">Calibración completada con éxito.</string>
+    <string name="listening">Escuchando...</string>
+    <string name="calibration_error">Error de calibración. Reintente.</string>
+    <string name="well_done">Muy bien</string>
+
+    <!-- Alarm Strings -->
+    <string name="once">Una vez</string>
+    <string name="daily">Diariamente</string>
+    <string name="weekdays">Días laborables</string>
+    <string name="select_sound">Seleccionar sonido</string>
+
+    <!-- Navigation Strings -->
+    <string name="navigation_drawer_open">Abrir menú</string>
+    <string name="navigation_drawer_close">Cerrar menú</string>
+    <string name="menu">Menú</string>
+
+    <!-- Role Selector -->
+    <string name="choose_role">Elige tu rol</string>
+    <string name="choose_role_desc">Selecciona cómo usarás la aplicación</string>
+    <string name="role_caregiver">Cuidador (Monitor)</string>
+    <string name="role_caregiver_desc">Supervisa y recibe alertas desde tu dispositivo.</string>
+    <string name="role_patient">Persona Cuidada (Terminal)</string>
+    <string name="role_patient_desc">Dispositivo que detecta caídas y permite pedir ayuda.</string>
+
+    <!-- Login/Register -->
+    <string name="login_title">Iniciar Sesión</string>
+    <string name="register_title">Registrarse</string>
+    <string name="email_hint">Correo electrónico</string>
+    <string name="password_hint">Contraseña</string>
+    <string name="full_name_hint">Nombre completo</string>
+    <string name="confirm_password_hint">Confirmar contraseña</string>
+    <string name="age_hint">Edad</string>
+    <string name="accept_terms">Acepto los términos y condiciones</string>
+    <string name="create_account">Crear cuenta</string>
+    <string name="remember_me">Recordarme</string>
+    <string name="login_button">Entrar</string>
+    <string name="forgot_password">¿Olvidaste tu contraseña?</string>
+    <string name="google_login">Entrar con Google</string>
+    <string name="login_tab">Login</string>
+    <string name="register_tab">Registro</string>
+
+    <!-- Terminal Config -->
+    <string name="terminal_config_title">Configuración del Terminal</string>
+    <string name="qr_instruction">Escanea este código desde el Monitor para vincular</string>
+    <string name="service_status">Servicio:</string>
+    <string name="service_state_title">Estado del Servicio</string>
+    <string name="service_status_active">Activo</string>
+    <string name="service_status_inactive">Inactivo</string>
+    <string name="bell_mode">Modo Campana</string>
+    <string name="voice_detector">Detector de Voz</string>
+    <string name="alarms">Alarmas</string>
+    <string name="shake_detection">Activación por Agitación</string>
+    <string name="pairing_in_progress">Vinculando...</string>
+
+    <string name="change_mode">Cambiar Modo</string>
+    <string name="scan_qr">Escanear QR</string>
+
+    <!-- Notification Actions -->
+    <string name="call_button">Llamar</string>
+    <string name="monitor_video_button">Monitorear</string>
+    <string name="clear_history">Limpiar historial</string>
+
+    <!-- Video Modes -->
+    <string name="mode_silent_monitor">Monitoreo Silencioso</string>
+    <string name="mode_audio_call">Llamada de Audio</string>
+    <string name="mode_video_call">Videollamada Activa</string>
+    <string name="audio_permission_required">Permiso de audio necesario</string>
+    <string name="monitor_switching_role">Cambiando a modo Terminal...</string>
+
+    <!-- Alert Types -->
+    <string name="alert_shake">🔔 Alerta por movimiento brusco</string>
+    <string name="alert_bell">🛎️ Campana tocada</string>
+
+    <!-- Settings -->
+    <string name="view_alert_history">Ver Historial de Alertas</string>
+
+    <!-- Shake Detection Toasts -->
+    <string name="shake_detection_enabled">Detección de agitación activada</string>
+    <string name="shake_detection_disabled">Detección de agitación desactivada</string>
+
+    <!-- New Strings -->
+    <string name="communication">Comunicación</string>
+    <string name="voice">Voz</string>
+    <string name="video">Video</string>
+    <string name="detection_voice">Detección de Voz</string>
+    <string name="detection_shake">Detección de Shake</string>
+    <string name="battery_low">Batería Baja</string>
+    <string name="alarm_active">Alarma Activa</string>
+
+    <!-- TERMINAL v2.0 -->
+    <string name="terminal_tap_help">Tocar para pedir ayuda</string>
+    <string name="terminal_help_sent">✓ Enviado</string>
+    <string name="terminal_connected">Conectado</string>
+    <string name="terminal_disconnected">Desconectado</string>
+    <string name="terminal_reconnecting">Reconectando…</string>
+    <string name="terminal_last_event">Último evento hace %s</string>
+    <string name="terminal_settings">Configuración</string>
+    <string name="terminal_pause_service">Pausar Servicio</string>
+    <string name="terminal_pause_confirm">¿Seguro que deseas pausar el servicio? El cuidador no recibirá alertas.</string>
+
+    <!-- MONITOR v2.0 -->
+    <string name="monitor_active_alerts">Alertas Activas</string>
+    <string name="monitor_my_terminals">Mis Terminales</string>
+    <string name="monitor_link_terminal">Vincular Terminal</string>
+    <string name="monitor_tab_home">Inicio</string>
+    <string name="monitor_tab_history">Historial</string>
+    <string name="monitor_tab_settings">Ajustes</string>
+    <string name="monitor_call">LLAMAR</string>
+    <string name="monitor_watch">MONITOREAR</string>
+    <string name="monitor_see_more">Ver más (%d)</string>
+    <string name="monitor_no_alerts">Sin alertas activas</string>
+    <string name="monitor_no_terminals">No hay terminales vinculados</string>
+
+    <!-- ONBOARDING v2.0 -->
+    <string name="onboarding_welcome_title">Monitor de Cuidados</string>
+    <string name="onboarding_welcome_subtitle">Cuidando a tus seres queridos con tecnología simple y segura</string>
+    <string name="onboarding_start_setup">COMENZAR CONFIGURACIÓN</string>
+    <string name="onboarding_skip">Saltar</string>
+    <string name="onboarding_who_uses">¿Quién usará este dispositivo?</string>
+    <string name="onboarding_caregiver">SOY EL CUIDADOR</string>
+    <string name="onboarding_caregiver_desc">Quiero monitorear y recibir alertas de mi ser querido</string>
+    <string name="onboarding_patient">SOY LA PERSONA CUIDADA</string>
+    <string name="onboarding_patient_desc">Quiero poder pedir ayuda fácilmente</string>
+    <string name="onboarding_can_change_later">Puedes cambiar esto después</string>
+    <string name="onboarding_scan_qr_title">Escanea el QR del dispositivo de tu ser querido</string>
+    <string name="onboarding_show_qr_title">Muestra este código QR al cuidador</string>
+    <string name="onboarding_show_qr_instruction">Pide al cuidador que escanee este código con su celular</string>
+    <string name="onboarding_setup_other_first">Configura el otro dispositivo primero</string>
+    <string name="onboarding_tutorial_1">Toca la campana 🔔 cuando necesites ayuda</string>
+    <string name="onboarding_tutorial_2">Si necesitas más ayuda, toca de nuevo la campana</string>
+    <string name="onboarding_tutorial_3">¡Listo! Tu cuidador recibirá tus alertas</string>
+    <string name="onboarding_start_using">EMPEZAR A USAR</string>
+
+    <!-- ACCESSIBILITY contentDescriptions -->
+    <string name="cd_bell_button">Tocar para pedir ayuda al cuidador</string>
+    <string name="cd_settings_button">Abrir configuración</string>
+    <string name="cd_connection_status">Estado de conexión: %s</string>
+    <string name="cd_back_button">Volver atrás</string>
+    <string name="cd_menu_button">Abrir menú de navegación</string>
+    <string name="cd_scan_qr_button">Escanear código QR de terminal</string>
+    <string name="cd_change_mode_button">Cambiar entre modo monitor y terminal</string>
+    <string name="cd_call_button">Llamar al terminal</string>
+    <string name="cd_video_button">Iniciar videollamada con terminal</string>
+    <string name="cd_monitor_button">Monitorear terminal silenciosamente</string>
+    <string name="cd_hangup_button">Colgar llamada</string>
+    <string name="cd_switch_camera">Cambiar cámara frontal y trasera</string>
+    <string name="cd_notification_badge">%d notificaciones sin leer</string>
+    <string name="cd_terminal_status">Terminal %s, estado: %s, batería: %s</string>
+    <string name="cd_dismiss_alert">Marcar alerta como atendida</string>
+    <string name="cd_delete_alarm">Eliminar esta alarma</string>
+    <string name="cd_toggle_alarm">Activar o desactivar alarma</string>
+    <string name="cd_terminal_card">Terminal %1$s, estado %2$s</string>
+    <string name="cd_alert_card">Alerta %1$s, %2$s</string>
+
+    <!-- SETTINGS TERMINAL v2.0 -->
+    <string name="settings_my_device">Mi Dispositivo</string>
+    <string name="settings_sensors">Sensores y Detección</string>
+    <string name="settings_alarms">Alarmas y Recordatorios</string>
+    <string name="settings_sound_vibration">Sonido y Vibración</string>
+    <string name="settings_language">Idioma</string>
+    <string name="settings_change_pairing">Cambiar vinculación</string>
+    <string name="settings_edit_phrases">Editar frases</string>
+    <string name="settings_edit_alarms">Editar alarmas</string>
+    <string name="settings_change_sound">Cambiar tono</string>
+    <string name="settings_alert_volume">Volumen de alerta</string>
+    <string name="settings_about">Acerca de</string>
+    <string name="settings_view_tutorial">Ver tutorial de nuevo</string>
+
+    <!-- GENERAL v2.0 -->
+    <string name="logout">Cerrar Sesión</string>
+    <string name="about">Acerca de</string>
+    <string name="cancel">Cancelar</string>
+    <string name="confirm">Confirmar</string>
+    <string name="battery_percent">🔋 %d%%</string>
+    <string name="wifi_connected">📶 WiFi</string>
+    <string name="about_message">Monitor de Cuidados v1.0\n\nDesarrollador: Monitor de Cuidados SAS\n\nCuidando a tus seres queridos con tecnología simple y segura.\n\nContacto: contacto.monitordecuidados@gmail.com</string>
+    <string name="terminal_scan_qr">Escanea este código desde el Monitor</string>
+    <string name="cd_qr_code">Código QR de vinculación</string>
+    <string name="qr_scanner_instruction">Escanea el código QR del Terminal</string>
+    <string name="alarm_select_sound">Seleccionar Sonido</string>
+    <string name="save">Guardar</string>
+    <string name="settings_device_name">Nombre del dispositivo</string>
+    <string name="settings_linked_to">Vinculado a</string>
+    <string name="not_linked">No vinculado</string>
+    <string name="lockscreen_scan_qr_instruction">Escanea este QR para vincular un monitor</string>
+
+    <!-- T36: Terminal Detail -->
+    <string name="terminal_info_title">Información del Terminal</string>
+    <string name="connection_type_label">Tipo de conexión</string>
+    <string name="battery_label">Nivel de batería</string>
+    <string name="ip_address_label">Dirección IP</string>
+</resources>

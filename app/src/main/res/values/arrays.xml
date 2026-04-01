@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="language_entries">
+        <item>Español</item>
+        <item>English</item>
+        <item>Français</item>
+        <item>Português</item>
+        <item>Deutsch</item>
+        <item>Italiano</item>
+    </string-array>
+    <string-array name="language_values">
+        <item>es</item>
+        <item>en</item>
+        <item>fr</item>
+        <item>pt</item>
+        <item>de</item>
+        <item>it</item>
+    </string-array>
+
+    <string-array name="battery_threshold_entries">
+        <item>10%</item>
+        <item>15% (Recomendado)</item>
+        <item>20%</item>
+        <item>25%</item>
+    </string-array>
+    <string-array name="battery_threshold_values">
+        <item>10</item>
+        <item>15</item>
+        <item>20</item>
+        <item>25</item>
+    </string-array>
+</resources>

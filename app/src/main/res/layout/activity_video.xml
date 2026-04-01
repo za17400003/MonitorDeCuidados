@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
+
+    <!-- Video display area -->
+    <TextureView
+        android:id="@+id/viewRemoteVideo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardLocalVideo"
+        android:layout_width="100dp"
+        android:layout_height="150dp"
+        android:layout_marginTop="48dp"
+        android:layout_marginEnd="16dp"
+        android:layout_gravity="top|end"
+        app:cardCornerRadius="@dimen/card_corner_radius"
+        app:cardElevation="8dp"
+        app:strokeColor="@color/white"
+        app:strokeWidth="1dp">
+        <TextureView
+            android:id="@+id/viewLocalVideo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <TextView
+        android:id="@+id/tvDuration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="48dp"
+        android:layout_gravity="top|center_horizontal"
+        android:text="00:00"
+        android:textColor="@color/white"
+        android:textSize="@dimen/text_body"
+        android:textStyle="bold" />
+
+    <!-- Control buttons (bottom bar) -->
+    <LinearLayout
+        android:id="@+id/llControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:padding="8dp">
+
+        <ImageButton
+            android:id="@+id/btnSwitchCamera"
+            android:layout_width="@dimen/touch_target_secondary"
+            android:layout_height="@dimen/touch_target_secondary"
+            android:layout_margin="8dp"
+            android:contentDescription="@string/cd_switch_camera"
+            android:src="@drawable/ic_camera_flip"
+            android:background="@drawable/bg_circle_teal"
+            android:padding="12dp"
+            android:scaleType="fitCenter"
+            app:tint="@color/white"/>
+
+        <ImageButton
+            android:id="@+id/btnToggleMode"
+            android:layout_width="@dimen/touch_target_secondary"
+            android:layout_height="@dimen/touch_target_secondary"
+            android:layout_margin="8dp"
+            android:contentDescription="@string/cd_video_button"
+            android:src="@drawable/ic_monitor_video"
+            android:background="@drawable/bg_circle_teal"
+            android:padding="12dp"
+            android:scaleType="fitCenter"
+            app:tint="@color/white"/>
+
+        <ImageButton
+            android:id="@+id/btnHangup"
+            android:layout_width="@dimen/touch_target_secondary"
+            android:layout_height="@dimen/touch_target_secondary"
+            android:layout_margin="8dp"
+            android:contentDescription="@string/cd_hangup_button"
+            android:src="@drawable/ic_call_end"
+            android:background="@color/button_hangup_red"
+            android:padding="12dp"
+            android:scaleType="fitCenter"
+            app:tint="@color/white"/>
+
+    </LinearLayout>
+</FrameLayout>

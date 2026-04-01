@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/primary_dark">
+
+    <!-- Botón cerrar (flecha) — TOP-LEFT, blanco -->
+    <ImageButton
+        android:id="@+id/btn_close_overlay"
+        android:layout_width="@dimen/touch_target_icon"
+        android:layout_height="@dimen/touch_target_icon"
+        android:layout_margin="@dimen/spacing_lg"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_back"
+        android:contentDescription="@string/cd_back_button"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:tint="@color/white" />
+
+    <!-- FrameLayout para SUPERPONER QR DENTRO de la campana -->
+    <FrameLayout
+        android:id="@+id/bell_container"
+        android:layout_width="360dp"
+        android:layout_height="360dp"
+        app:layout_constraintBottom_toTopOf="@id/tv_bell_label"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btn_close_overlay"
+        app:layout_constraintVertical_chainStyle="packed">
+
+        <!-- Campana GIGANTE — ocupa todo el FrameLayout -->
+        <ImageView
+            android:id="@+id/iv_bell_large"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_notification_bell"
+            android:contentDescription="@string/cd_bell_button"
+            android:scaleType="fitCenter"
+            app:tint="@color/white" />
+
+        <!-- QR Code SUPERPUESTO en el centro del cuerpo de la campana -->
+        <ImageView
+            android:id="@+id/iv_qr_pairing"
+            android:layout_width="140dp"
+            android:layout_height="140dp"
+            android:layout_gravity="center"
+            android:layout_marginTop="10dp"
+            android:contentDescription="@string/terminal_scan_qr" />
+
+    </FrameLayout>
+
+    <!-- Texto "Toca para pedir ayuda" — PRIMERO debajo de campana, BOLD -->
+    <TextView
+        android:id="@+id/tv_bell_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_xl"
+        android:text="@string/terminal_tap_help"
+        android:textColor="@color/white"
+        android:textSize="@dimen/text_section_header"
+        android:textStyle="bold"
+        android:accessibilityLiveRegion="polite"
+        app:layout_constraintBottom_toTopOf="@id/tv_qr_instruction"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/bell_container" />
+
+    <!-- Texto instrucción QR — SEGUNDO, debajo del texto acción -->
+    <TextView
+        android:id="@+id/tv_qr_instruction"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:text="@string/lockscreen_scan_qr_instruction"
+        android:textColor="@color/white"
+        android:textSize="@dimen/text_label"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tv_bell_label" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

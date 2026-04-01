@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="@dimen/spacing_xl"
+    android:background="@color/background">
+
+    <TextView
+        android:id="@+id/tvLanguageTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Idioma preferido"
+        android:textSize="@dimen/text_screen_header"
+        android:textStyle="bold"
+        android:textColor="@color/text_primary" />
+
+    <TextView
+        android:id="@+id/tvLanguageSubtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Selecciona tu idioma"
+        android:textSize="@dimen/text_body"
+        android:textColor="@color/text_secondary"
+        android:layout_marginTop="@dimen/spacing_sm" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvLanguages"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="@dimen/spacing_xl" />
+
+    <Button
+        android:id="@+id/btnContinue"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/touch_target_primary"
+        android:text="Continuar"
+        android:textSize="@dimen/text_button_primary"
+        android:layout_marginTop="@dimen/spacing_xl"
+        android:backgroundTint="@color/primary"
+        android:textColor="@color/white"
+        android:contentDescription="Continuar a la siguiente pantalla" />
+
+</LinearLayout>

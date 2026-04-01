@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/spacing_xl"
+    android:background="@color/surface">
+
+    <TextView
+        android:id="@+id/tvDialogTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Nueva Alarma"
+        android:textSize="@dimen/text_section_header"
+        android:textStyle="bold"
+        android:textColor="@color/text_primary"
+        android:layout_marginBottom="@dimen/spacing_lg" />
+
+    <TimePicker
+        android:id="@+id/time_picker"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:timePickerMode="spinner"
+        android:layout_marginBottom="@dimen/spacing_lg" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/spacing_lg"
+        android:hint="Mensaje de alarma"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/input_alarm_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/text_body"
+            android:textColor="@color/text_primary" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <Spinner
+        android:id="@+id/spinner_repeat"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/touch_target_secondary"
+        android:layout_marginBottom="@dimen/spacing_lg" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_sound"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/touch_target_secondary"
+        android:text="@string/alarm_select_sound"
+        android:textSize="@dimen/text_button_secondary"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        app:strokeColor="@color/primary"
+        app:strokeWidth="1dp"
+        android:textColor="@color/primary"
+        android:layout_marginBottom="@dimen/spacing_lg" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/touch_target_secondary"
+            android:text="@string/cancel"
+            android:textSize="@dimen/text_button_secondary"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            app:strokeColor="@color/primary"
+            app:strokeWidth="1dp"
+            android:textColor="@color/primary"
+            android:layout_marginEnd="@dimen/spacing_sm" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_save"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/touch_target_secondary"
+            android:text="@string/save"
+            android:textSize="@dimen/text_button_secondary"
+            android:backgroundTint="@color/primary"
+            android:textColor="@color/white" />
+    </LinearLayout>
+</LinearLayout>

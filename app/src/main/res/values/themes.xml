@@ -1,0 +1,53 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.MonitorDeCuidados" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorPrimaryContainer">@color/primary_dark</item>
+        <item name="colorOnPrimaryContainer">@color/primary_light</item>
+
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">@color/primary_variant</item>
+        <item name="colorOnSecondary">@color/white</item>
+
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">@color/primary_dark</item>
+
+        <!-- Background and Surface colors -->
+        <item name="android:windowBackground">@color/background</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+        <item name="colorOutline">@color/divider</item>
+
+        <!-- Navigation bar color -->
+        <item name="android:navigationBarColor">@color/background</item>
+    </style>
+
+    <style name="Theme.MonitorDeCuidados.NoActionBar" parent="Theme.MonitorDeCuidados">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+
+    <style name="Theme.MonitorDeCuidados.AppBarOverlay" parent="ThemeOverlay.AppCompat.Dark.ActionBar" />
+    <style name="Theme.MonitorDeCuidados.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
+
+    <style name="TextAppearance.Toolbar.Title" parent="TextAppearance.MaterialComponents.Headline6">
+        <item name="android:textSize">@dimen/text_section_header</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TextAppearance.Tab" parent="TextAppearance.Design.Tab">
+        <item name="android:textSize">@dimen/text_button_secondary</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+
+    <style name="Theme.BellLockscreen" parent="Theme.MonitorDeCuidados">
+        <item name="android:windowBackground">@color/primary_dark</item>
+        <item name="android:navigationBarColor">@color/primary_dark</item>
+        <item name="android:statusBarColor">@color/primary_dark</item>
+    </style>
+</resources>

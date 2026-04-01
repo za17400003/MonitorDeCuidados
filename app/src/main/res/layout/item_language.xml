@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="@dimen/card_padding"
+    android:gravity="center_vertical"
+    android:minHeight="@dimen/touch_target_secondary"
+    android:background="?attr/selectableItemBackground">
+
+    <TextView
+        android:id="@+id/tvFlag"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="24sp"
+        tools:text="🇪🇸" />
+
+    <TextView
+        android:id="@+id/tvLanguageName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="@dimen/spacing_lg"
+        tools:text="Español"
+        android:textSize="@dimen/text_body"
+        android:textColor="@color/text_primary" />
+
+    <ImageView
+        android:id="@+id/ivCheck"
+        android:layout_width="@dimen/icon_secondary"
+        android:layout_height="@dimen/icon_secondary"
+        android:src="@drawable/ic_check"
+        android:visibility="gone"
+        app:tint="@color/status_success"
+        android:contentDescription="Seleccionado" />
+
+</LinearLayout>

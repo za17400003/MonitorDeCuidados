@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:padding="@dimen/spacing_xl">
+
+    <!-- MAIN GATE CONTAINER (VISIBLE BY DEFAULT) -->
+    <LinearLayout
+        android:id="@+id/llMainGate"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="visible"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <ImageView
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:src="@drawable/ic_notification_bell"
+            app:tint="@color/primary"
+            android:importantForAccessibility="no" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xl"
+            android:text="Evaluación de Capacidades"
+            android:textSize="@dimen/text_screen_header"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_sm"
+            android:text="Ayúdanos a personalizar la experiencia"
+            android:textSize="@dimen/text_body"
+            android:textColor="@color/text_secondary"
+            android:gravity="center" />
+
+        <Button
+            android:id="@+id/btnDoAssessment"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/touch_target_primary"
+            android:layout_marginTop="@dimen/spacing_xl"
+            android:text="Hacer Evaluación"
+            android:textSize="@dimen/text_button_primary"
+            android:textAllCaps="false"
+            android:backgroundTint="@color/primary"
+            android:textColor="@color/white"
+            android:contentDescription="Hacer Evaluación" />
+
+        <Button
+            android:id="@+id/btnSkipAssessment"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/touch_target_primary"
+            android:layout_marginTop="@dimen/spacing_md"
+            android:text="OMITIR"
+            android:textSize="@dimen/text_button_primary"
+            android:textAllCaps="false"
+            android:textColor="@color/primary"
+            app:strokeColor="@color/primary"
+            android:contentDescription="Omitir evaluación" />
+
+        <Button
+            android:id="@+id/btnCancelAssessment"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/touch_target_primary"
+            android:layout_marginTop="@dimen/spacing_md"
+            android:text="Cancelar"
+            android:textSize="@dimen/text_button_primary"
+            android:textAllCaps="false"
+            android:textColor="@color/text_hint"
+            android:contentDescription="Cancelar evaluación" />
+    </LinearLayout>
+
+    <!-- ASSESSMENT CONTAINER (HIDDEN BY DEFAULT) -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/clAssessmentContent"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvAssessmentTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Pregunta"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_section_header"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <RadioGroup
+            android:id="@+id/rgCapabilities"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xl"
+            app:layout_constraintTop_toBottomOf="@+id/tvAssessmentTitle">
+            <RadioButton android:id="@+id/rbOption1" android:layout_width="match_parent" android:layout_height="@dimen/touch_target_secondary" android:textSize="@dimen/text_body" android:paddingStart="@dimen/spacing_md" />
+            <RadioButton android:id="@+id/rbOption2" android:layout_width="match_parent" android:layout_height="@dimen/touch_target_secondary" android:textSize="@dimen/text_body" android:paddingStart="@dimen/spacing_md" />
+            <RadioButton android:id="@+id/rbOption3" android:layout_width="match_parent" android:layout_height="@dimen/touch_target_secondary" android:textSize="@dimen/text_body" android:paddingStart="@dimen/spacing_md" />
+        </RadioGroup>
+
+        <Button
+            android:id="@+id/btnBack"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/touch_target_secondary"
+            android:text="Atrás"
+            android:textSize="@dimen/text_button_secondary"
+            android:contentDescription="@string/cd_back_button"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <Button
+            android:id="@+id/btnNext"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/touch_target_secondary"
+            android:text="Siguiente"
+            android:textSize="@dimen/text_button_secondary"
+            android:backgroundTint="@color/primary"
+            android:textColor="@color/white"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

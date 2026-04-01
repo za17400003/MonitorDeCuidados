@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="@dimen/spacing_md"
+    android:background="@color/surface">
+
+    <TextView
+        android:id="@+id/tvNotifTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:textColor="@color/text_primary"
+        android:textStyle="bold"
+        android:textSize="18sp"
+        android:text="Monitor de Cuidados" />
+
+    <TextView
+        android:id="@+id/tvNotifLog"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tvNotifTitle"
+        android:textColor="@color/text_secondary"
+        android:textSize="16sp"
+        android:paddingBottom="@dimen/spacing_sm"
+        android:text="Servicio Activo" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tvNotifLog"
+        android:orientation="horizontal"
+        android:gravity="end|center_vertical">
+
+        <ImageButton
+            android:id="@+id/btnNotifCall"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:padding="12dp"
+            android:src="@drawable/ic_call_up"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_call_button"
+            app:tint="@color/button_call_green" />
+
+        <ImageButton
+            android:id="@+id/btnNotifVideo"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:padding="12dp"
+            android:src="@drawable/ic_monitor_video"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_monitor_button"
+            app:tint="@color/primary" />
+
+        <ImageButton
+            android:id="@+id/btnNotifClear"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:padding="12dp"
+            android:src="@drawable/ic_trash"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_dismiss_alert"
+            app:tint="@color/status_error" />
+    </LinearLayout>
+</RelativeLayout>

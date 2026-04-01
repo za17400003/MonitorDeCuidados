@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginVertical="4dp"
+    android:minHeight="@dimen/alert_card_min_height"
+    app:cardCornerRadius="@dimen/card_corner_radius"
+    app:cardElevation="@dimen/card_elevation"
+    app:cardBackgroundColor="?attr/colorSurface"
+    app:strokeColor="?attr/colorOutline"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="@dimen/card_padding"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tvAlertIcon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="24sp"
+            tools:text="🔋" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="@dimen/spacing_md"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvTerminalName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                tools:text="Terminal"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_label" />
+
+            <TextView
+                android:id="@+id/tvAlertMessage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                tools:text="Batería Baja"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_body"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvAlertTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                tools:text="Hace 2 min"
+                android:textColor="@color/text_hint"
+                android:textSize="@dimen/text_timestamp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginStart="@dimen/spacing_sm">
+
+            <Button
+                android:id="@+id/btnCall"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="@string/monitor_call"
+                android:textSize="14sp"
+                android:background="@drawable/bg_action_button"
+                android:textColor="@color/white"
+                android:contentDescription="@string/cd_call_button"
+                android:layout_marginEnd="@dimen/spacing_xs"/>
+
+            <Button
+                android:id="@+id/btnMonitor"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="@string/monitor_watch"
+                android:textSize="14sp"
+                android:background="@drawable/bg_action_button"
+                android:textColor="@color/white"
+                android:contentDescription="@string/cd_monitor_button"/>
+        </LinearLayout>
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

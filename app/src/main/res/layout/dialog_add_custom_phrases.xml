@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/spacing_xl"
+    android:background="@color/surface">
+
+    <TextView
+        android:id="@+id/tvDialogTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Frases de Emergencia"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/text_section_header"
+        android:textStyle="bold" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilPhrase"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_lg"
+        android:hint="Escribe una frase (ej. Auxilio)"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etPhrase"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/text_body"
+            android:textColor="@color/text_primary" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <Button
+        android:id="@+id/btnRecordPhrase"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/touch_target_secondary"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:text="Grabar frase"
+        android:textSize="@dimen/text_button_secondary"
+        app:icon="@drawable/ic_microphone"
+        android:contentDescription="Grabar nueva frase de voz" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_lg"
+        android:text="Sensibilidad de detección"
+        android:textColor="@color/text_secondary"
+        android:textSize="@dimen/text_label" />
+
+    <com.google.android.material.slider.Slider
+        android:id="@+id/sliderSensitivity"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:valueFrom="0.0"
+        android:valueTo="100.0"
+        android:value="70.0"
+        app:labelBehavior="withinBounds"
+        android:contentDescription="Ajustar sensibilidad del detector de voz" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvPhrases"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginTop="@dimen/spacing_lg" />
+
+    <Button
+        android:id="@+id/btnSavePhrases"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/touch_target_secondary"
+        android:layout_marginTop="@dimen/spacing_xl"
+        android:text="@string/confirm"
+        android:textSize="@dimen/text_button_secondary"
+        android:backgroundTint="@color/primary"
+        android:textColor="@color/white"
+        android:contentDescription="Guardar configuración de frases" />
+
+</LinearLayout>

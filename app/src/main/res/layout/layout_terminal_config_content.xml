@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <!-- STATUS BAR (56dp) -->
+    <ImageButton
+        android:id="@+id/btnTerminalSettings"
+        android:layout_width="@dimen/touch_target_secondary"
+        android:layout_height="@dimen/touch_target_secondary"
+        android:src="@drawable/ic_settings"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/cd_settings_button"
+        app:tint="@color/text_secondary"
+        android:accessibilityTraversalBefore="@id/btnBellContainer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:layout_marginStart="@dimen/spacing_sm"
+        android:layout_marginTop="@dimen/spacing_sm"/>
+
+    <TextView
+        android:id="@+id/tvConnectionStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/terminal_connected"
+        android:textSize="@dimen/text_body"
+        android:textColor="@color/connected_green"
+        android:drawablePadding="@dimen/spacing_sm"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/btnTerminalSettings"
+        app:layout_constraintBottom_toBottomOf="@id/btnTerminalSettings"
+        android:layout_marginEnd="@dimen/spacing_lg"
+        android:accessibilityLiveRegion="polite"/>
+
+    <!-- APP NAME (decorativo) -->
+    <TextView
+        android:id="@+id/tvAppName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textSize="@dimen/text_app_name"
+        android:textColor="@color/text_secondary"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnTerminalSettings"
+        android:layout_marginTop="@dimen/spacing_sm"/>
+
+    <!-- BOTÓN CAMPANA GIGANTE (160dp × 160dp) -->
+    <FrameLayout
+        android:id="@+id/btnBellContainer"
+        android:layout_width="@dimen/bell_button_size"
+        android:layout_height="@dimen/bell_button_size"
+        android:background="@drawable/bg_bell_button"
+        android:foreground="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="@string/cd_bell_button"
+        android:accessibilityTraversalBefore="@id/infoStrip"
+        android:accessibilityTraversalAfter="@id/btnTerminalSettings"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvAppName"
+        app:layout_constraintBottom_toTopOf="@id/infoStrip"
+        android:layout_marginTop="@dimen/spacing_xl">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <ImageView
+                android:id="@+id/ivBellIcon"
+                android:layout_width="@dimen/bell_icon_size"
+                android:layout_height="@dimen/bell_icon_size"
+                android:src="@drawable/ic_notification_bell"
+                app:tint="@color/white"
+                android:importantForAccessibility="no"/>
+
+            <TextView
+                android:id="@+id/tvBellLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/terminal_tap_help"
+                android:textSize="@dimen/text_bell_label"
+                android:textColor="@color/white"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginTop="@dimen/spacing_sm"
+                android:accessibilityLiveRegion="polite"/>
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- INFO STRIP (bottom, 48dp) -->
+    <LinearLayout
+        android:id="@+id/infoStrip"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/terminal_info_strip_height"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="@dimen/spacing_lg"
+        android:background="@color/surface_variant"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <TextView
+            android:id="@+id/tvLastEvent"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="@dimen/text_label"
+            android:textColor="@color/text_secondary"
+            tools:text="Último evento hace 5 min"/>
+
+        <TextView
+            android:id="@+id/tvBatteryStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/text_label"
+            android:textColor="@color/text_secondary"
+            android:layout_marginStart="@dimen/spacing_sm"
+            tools:text="🔋 85%"/>
+
+        <TextView
+            android:id="@+id/tvWifiStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/text_label"
+            android:textColor="@color/text_secondary"
+            android:layout_marginStart="@dimen/spacing_sm"
+            tools:text="📶 WiFi"/>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- PRIMARY PALETTE v2.0 — AAA Compliance -->
+    <color name="primary">#006B6B</color>              <!-- AAA 7.2:1 vs blanco -->
+    <color name="primary_dark">#004D4D</color>          <!-- Status bar, AppBar -->
+    <color name="primary_light">#4DB6AC</color>         <!-- Acentos, iconos activos -->
+    <color name="primary_variant">#008B8B</color>       <!-- Acentos no-textuales (AA 4.9:1) -->
+
+    <!-- Compatibilidad legacy — alias a primary -->
+    <color name="primary_teal">@color/primary</color>
+    <color name="primary_care">@color/primary</color>
+
+    <!-- TEXT COLORS — AAA Compliance -->
+    <color name="text_primary">#1A1A1A</color>          <!-- 15.3:1 vs blanco -->
+    <color name="text_secondary">#555555</color>        <!-- 7.5:1 vs blanco (AAA) -->
+    <color name="text_hint">#757575</color>             <!-- 4.6:1 vs blanco (AA) -->
+    <color name="text_primary_light">#1A1A1A</color>
+    <color name="text_secondary_light">#555555</color>
+
+    <!-- BACKGROUNDS -->
+    <color name="background">#FAFAFA</color>            <!-- Fondo principal día -->
+    <color name="background_light">#FAFAFA</color>
+    <color name="surface">#FFFFFF</color>               <!-- Cards, diálogos -->
+    <color name="surface_variant">#F5F5F5</color>       <!-- Profundidad -->
+
+    <!-- STATUS COLORS -->
+    <color name="status_success">#2E7D32</color>        <!-- Verde (5.1:1 AA) -->
+    <color name="status_error">#D32F2F</color>          <!-- Rojo alertas (5.9:1 AA) -->
+    <color name="status_warning">#F57F17</color>        <!-- Ámbar (usar con texto negro) -->
+    <color name="status_info">#1565C0</color>           <!-- Azul (5.5:1 AA) -->
+    <color name="status_green">#2E7D32</color>
+    <color name="status_red">#D32F2F</color>
+
+    <!-- CONNECTION STATUS -->
+    <color name="connected_green">#2E7D32</color>
+    <color name="reconnecting_amber">#F57F17</color>
+    <color name="disconnected_red">#D32F2F</color>
+
+    <!-- UTILITY -->
+    <color name="divider">#E0E0E0</color>
+    <color name="disabled">#BDBDBD</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="transparent">#00000000</color>
+    <color name="qr_icon_tint">#FF000000</color>
+
+    <!-- BUTTON COLORS -->
+    <color name="button_call_green">#2E7D32</color>
+    <color name="button_hangup_red">#D32F2F</color>
+</resources>

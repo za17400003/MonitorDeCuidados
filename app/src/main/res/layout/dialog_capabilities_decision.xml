@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/spacing_xl"
+    android:background="@color/surface">
+
+    <TextView
+        android:id="@+id/tvDialogTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Tipo de Condición"
+        android:textSize="@dimen/text_section_header"
+        android:textStyle="bold"
+        android:textColor="@color/primary" />
+
+    <TextView
+        android:id="@+id/tvDialogBody"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_lg"
+        android:text="Por favor, seleccione la situación que mejor describa la condición de la persona cuidada:"
+        android:textSize="@dimen/text_body"
+        android:textColor="@color/text_secondary" />
+
+    <Button
+        android:id="@+id/btnRouteA"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/touch_target_primary"
+        android:layout_marginTop="@dimen/spacing_xl"
+        android:text="Accidente/Evento Temporal"
+        android:textSize="@dimen/text_button_primary"
+        android:textAllCaps="false"
+        android:backgroundTint="@color/primary"
+        android:textColor="@color/white"
+        android:contentDescription="Accidente o evento temporal" />
+
+    <Button
+        android:id="@+id/btnRouteB"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/touch_target_primary"
+        android:layout_marginTop="@dimen/spacing_md"
+        android:text="Condición Crónica/Prolongada"
+        android:textSize="@dimen/text_button_primary"
+        android:textAllCaps="false"
+        android:backgroundTint="@color/primary"
+        android:textColor="@color/white"
+        android:contentDescription="Condición crónica o prolongada" />
+
+    <Button
+        android:id="@+id/btnBack"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/touch_target_primary"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:text="Volver atrás"
+        android:textSize="@dimen/text_button_secondary"
+        android:textAllCaps="false"
+        android:textColor="@color/text_hint"
+        android:contentDescription="@string/cd_back_button" />
+
+</LinearLayout>

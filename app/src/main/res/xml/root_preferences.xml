@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <PreferenceCategory
+        android:key="notif_cat_common"
+        app:title="Notificaciones Generales">
+        <SwitchPreferenceCompat
+            app:key="notifications_sound"
+            app:title="Habilitar Sonido"
+            app:defaultValue="true" />
+
+        <Preference
+            app:key="notification_ringtone"
+            app:title="Elegir sonido de notificación"
+            app:summary="Selecciona el tono para las alertas"
+            app:dependency="notifications_sound" />
+
+        <SwitchPreferenceCompat
+            app:key="notifications_vibration"
+            app:title="Vibración"
+            app:defaultValue="true" />
+
+        <Preference
+            android:key="view_alert_history_pref"
+            app:title="@string/view_alert_history"
+            app:summary="Ver registro de campanas y voz" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="notif_cat_battery"
+        app:title="🔋 Notificaciones de Batería">
+        <SwitchPreferenceCompat
+            app:key="battery_alerts_enabled"
+            app:title="Notificar cuando batería esté baja"
+            app:defaultValue="true" />
+
+        <ListPreference
+            app:key="battery_threshold_percent"
+            app:title="Umbral de batería baja"
+            app:entries="@array/battery_threshold_entries"
+            app:entryValues="@array/battery_threshold_values"
+            app:defaultValue="15"
+            app:dependency="battery_alerts_enabled" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="notif_cat_monitor"
+        app:title="Configuración de Monitor">
+        <SeekBarPreference
+            app:key="notifications_fifo_limit"
+            app:title="Límite de historial"
+            app:summary="Máximo de notificaciones guardadas"
+            app:defaultValue="5"
+            app:min="5"
+            android:max="100"
+            app:showSeekBarValue="true" />
+
+        <SwitchPreferenceCompat
+            app:key="monitor_call_notifications"
+            app:title="Notificaciones de llamada"
+            app:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            app:key="monitor_video_alerts"
+            app:title="Alertas de video"
+            app:defaultValue="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="notif_cat_terminal"
+        app:title="Configuración de Terminal">
+        <SwitchPreferenceCompat
+            app:key="terminal_auto_answer"
+            app:title="Respuesta automática"
+            app:summary="Contestar llamadas automáticamente"
+            app:defaultValue="true" />
+
+        <SeekBarPreference
+            app:key="terminal_voice_sensitivity"
+            app:title="Sensibilidad de voz"
+            app:defaultValue="50"
+            app:min="0"
+            android:max="100"
+            app:showSeekBarValue="true" />
+
+        <SeekBarPreference
+            app:key="terminal_bell_volume"
+            app:title="Volumen de campana"
+            app:defaultValue="80"
+            app:min="0"
+            android:max="100"
+            app:showSeekBarValue="true" />
+    </PreferenceCategory>
+
+    <!-- TERMINAL v2.0 CATEGORIES -->
+    <PreferenceCategory
+        android:key="terminal_device_cat"
+        app:title="@string/settings_my_device"
+        app:isPreferenceVisible="false">
+
+        <Preference
+            android:key="terminal_device_name"
+            app:title="@string/settings_device_name"
+            app:summary=""/>
+
+        <Preference
+            android:key="terminal_paired_monitor"
+            app:title="@string/settings_linked_to"
+            app:summary=""/>
+
+        <Preference
+            android:key="terminal_change_pairing"
+            app:title="@string/settings_change_pairing"
+            app:summary="Escanear nuevo código QR"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="terminal_sensors_cat"
+        app:title="@string/settings_sensors"
+        app:isPreferenceVisible="false">
+
+        <SwitchPreferenceCompat
+            app:key="shake_detection_enabled"
+            app:title="Agitación (Shake)"
+            app:defaultValue="true"/>
+
+        <SwitchPreferenceCompat
+            app:key="voice_detection_enabled"
+            app:title="Detección de Voz"
+            app:defaultValue="true"/>
+
+        <Preference
+            android:key="edit_custom_phrases"
+            app:title="@string/settings_edit_phrases"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="terminal_alarms_cat"
+        app:title="@string/settings_alarms"
+        app:isPreferenceVisible="false">
+
+        <Preference
+            android:key="edit_alarms"
+            app:title="@string/settings_edit_alarms"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="terminal_sound_cat"
+        app:title="@string/settings_sound_vibration"
+        app:isPreferenceVisible="false">
+
+        <Preference
+            android:key="change_bell_sound"
+            app:title="@string/settings_change_sound"/>
+
+        <SwitchPreferenceCompat
+            app:key="vibration_enabled"
+            app:title="Vibración"
+            app:defaultValue="true"/>
+
+        <SeekBarPreference
+            app:key="alert_volume"
+            app:title="@string/settings_alert_volume"
+            app:defaultValue="70"
+            app:min="0"
+            android:max="100"
+            app:showSeekBarValue="true"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="terminal_extras_cat"
+        app:title="Extras"
+        app:isPreferenceVisible="false">
+
+        <Preference
+            android:key="view_tutorial"
+            app:title="@string/settings_view_tutorial"/>
+
+        <Preference
+            android:key="pause_service"
+            app:title="@string/terminal_pause_service"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="Recordatorios (Reminders)">
+        <SwitchPreferenceCompat
+            app:key="reminders_enabled"
+            app:title="Habilitar Recordatorios"
+            app:defaultValue="true" />
+
+        <Preference
+            app:key="configure_reminders"
+            app:title="Configurar Horarios"
+            app:summary="Establecer horas para toma de medicamentos"
+            app:dependency="reminders_enabled" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="Accesibilidad">
+        <SeekBarPreference
+            app:key="accessibility_text_size"
+            app:title="Tamaño de texto"
+            app:defaultValue="100"
+            app:min="80"
+            android:max="200"
+            app:showSeekBarValue="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="Apariencia">
+        <Preference
+            app:key="app_language"
+            app:title="Idioma"
+            app:summary="Cambiar idioma de la aplicación" />
+
+        <SwitchPreferenceCompat
+            app:key="night_mode"
+            app:title="Modo nocturno"
+            app:defaultValue="false" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

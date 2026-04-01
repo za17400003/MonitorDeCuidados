@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="@dimen/spacing_xl">
+
+    <ImageView
+        android:id="@+id/ivLogo"
+        android:layout_width="160dp"
+        android:layout_height="160dp"
+        android:src="@drawable/ic_launcher_foreground"
+        android:background="@drawable/ic_launcher_background"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/tvWelcomeTitle"
+        app:layout_constraintVertical_chainStyle="packed"/>
+
+    <TextView
+        android:id="@+id/tvWelcomeTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/onboarding_welcome_title"
+        android:textSize="@dimen/text_screen_header"
+        android:textStyle="bold"
+        android:textColor="@color/text_primary"
+        android:gravity="center"
+        android:layout_marginTop="@dimen/spacing_xl"
+        app:layout_constraintTop_toBottomOf="@id/ivLogo"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/tvWelcomeSubtitle"/>
+
+    <TextView
+        android:id="@+id/tvWelcomeSubtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/onboarding_welcome_subtitle"
+        android:textSize="@dimen/text_body"
+        android:textColor="@color/text_secondary"
+        android:gravity="center"
+        android:layout_marginTop="@dimen/spacing_md"
+        app:layout_constraintTop_toBottomOf="@id/tvWelcomeTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/btnStartSetup"/>
+
+    <Button
+        android:id="@+id/btnStartSetup"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/touch_target_primary"
+        android:text="@string/onboarding_start_setup"
+        android:textSize="@dimen/text_button_primary"
+        android:layout_marginTop="@dimen/spacing_xl"
+        app:layout_constraintTop_toBottomOf="@id/tvWelcomeSubtitle"
+        app:layout_constraintBottom_toTopOf="@id/tvSkip"/>
+
+    <TextView
+        android:id="@+id/tvSkip"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
+        android:text="@string/onboarding_skip"
+        android:textSize="@dimen/text_label"
+        android:textColor="@color/primary"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/btnStartSetup"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
