@@ -6,6 +6,12 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import com.example.monitordecuidados.databinding.ActivityTerminalDetailBinding
 import com.example.monitordecuidados.utils.EncryptedPreferencesHelper
+import com.example.monitordecuidados.communication.CallManager
+import com.example.monitordecuidados.utils.NetworkUtils
+import com.example.monitordecuidados.logging.FileLogger
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -21,6 +27,7 @@ class TerminalDetailActivity : AppCompatActivity() {
     private lateinit var binding: ActivityTerminalDetailBinding
     private val client = OkHttpClient()
     private var remoteIp: String? = null
+    private var terminalId: String? = null
     private var isUpdatingFromServer = false
     private val pollHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val pollRunnable = object : Runnable {
@@ -30,6 +37,13 @@ class TerminalDetailActivity : AppCompatActivity() {
         }
     }
 
+    private var callManager: CallManager? = null
+    private var isCallActive = false
+    private var currentCallDocId: String? = null
+
+    private var consecutiveFailures = 0
+    private var isConnectionLost = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityTerminalDetailBinding.inflate(layoutInflater)
@@ -37,6 +51,7 @@ class TerminalDetailActivity : AppCompatActivity() {
 
         val terminalName = intent.getStringExtra("terminal_name") ?: "Terminal"
         val terminalStatus = intent.getStringExtra("terminal_status") ?: "disconnected"
+        terminalId = intent.getStringExtra("terminal_id")
         remoteIp = EncryptedPreferencesHelper.getString(this, "paired_terminal_ip")
 
         // Toolbar con back
@@ -47,12 +62,84 @@ class TerminalDetailActivity : AppCompatActivity() {
         binding.tvTerminalName.text = terminalName
         updateStatusText(terminalStatus)
 
-        // Llamar → VideoActivity mode="audiocall"
+        // T45: Walkie-talkie in-place
         binding.btnCall.setOnClickListener {
-            startActivity(Intent(this, VideoActivity::class.java).apply {
-                putExtra("mode", "audiocall")
-                putExtra("remote_ip", remoteIp)
-            })
+            val ip = remoteIp ?: return@setOnClickListener
+            
+            if (!isCallActive) {
+                // T58: Señalar al Terminal que inicie su CallManager
+                Thread {
+                    try {
+                        val url = java.net.URL("http://$ip:8080/request_call")
+                        val conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.requestMethod = "POST"
+                        conn.connectTimeout = 3000
+                        conn.doOutput = true
+                        conn.outputStream.write("source=monitor".toByteArray())
+                        conn.responseCode
+                        conn.disconnect()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error notifying terminal of call", e)
+                    }
+                }.start()
+
+                // Iniciar llamada walkie-talkie in-place lado Monitor
+                callManager = CallManager(ip, 5060)
+                callManager?.startCall()
+                isCallActive = true
+                binding.tvCallLabel.text = "Colgar"
+                binding.ivCallIcon.setBackgroundResource(R.drawable.button_rounded_red)
+                binding.ivCallIcon.setImageResource(R.drawable.ic_call_end)
+
+                // T48: Implement call_history
+                val callDoc = hashMapOf(
+                    "caller_id" to FirebaseAuth.getInstance().currentUser?.uid,
+                    "receiver_id" to terminalId,
+                    "start_time" to FieldValue.serverTimestamp(),
+                    "end_time" to null,
+                    "duration_seconds" to 0L,
+                    "call_type" to "voice",
+                    "status" to "in_progress"
+                )
+                val callRef = FirebaseFirestore.getInstance().collection("call_history").document()
+                currentCallDocId = callRef.id
+                callRef.set(callDoc)
+            } else {
+                // T58: Señalar al Terminal que termine su CallManager
+                Thread {
+                    try {
+                        val url = java.net.URL("http://$ip:8080/command")
+                        val conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.requestMethod = "POST"
+                        conn.connectTimeout = 3000
+                        conn.setRequestProperty("Content-Type", "application/json")
+                        conn.doOutput = true
+                        conn.outputStream.write("{\"command\":\"STOP_AUDIO_CALL\"}".toByteArray())
+                        conn.responseCode
+                        conn.disconnect()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error notifying terminal to stop call", e)
+                    }
+                }.start()
+
+                // Colgar lado Monitor
+                callManager?.stopCall()
+                callManager = null
+                isCallActive = false
+                binding.tvCallLabel.text = "Llamar"
+                binding.ivCallIcon.setBackgroundResource(R.drawable.bg_circle_teal)
+                binding.ivCallIcon.setImageResource(R.drawable.ic_call_up)
+
+                // T48: Update call_history
+                currentCallDocId?.let { docId ->
+                    FirebaseFirestore.getInstance().collection("call_history").document(docId)
+                        .update(
+                            "end_time", FieldValue.serverTimestamp(),
+                            "status", "completed"
+                        )
+                    currentCallDocId = null
+                }
+            }
         }
 
         // Monitorear → VideoActivity mode="monitor"
@@ -81,8 +168,6 @@ class TerminalDetailActivity : AppCompatActivity() {
         binding.switchAlarms.setOnCheckedChangeListener { _, isChecked ->
             if (!isUpdatingFromServer) sendCommandToTerminal(if (isChecked) "SET_ALARMS_ON" else "SET_ALARMS_OFF")
         }
-
-        // T39-C: Polling de estado real arranca en onResume()
     }
 
     override fun onResume() {
@@ -95,6 +180,11 @@ class TerminalDetailActivity : AppCompatActivity() {
         pollHandler.removeCallbacks(pollRunnable)
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        callManager?.stopCall()
+    }
+
     private fun updateStatusText(status: String, battery: Int = -1) {
         val statusLabel = when (status) {
             "connected", "Conectado" -> "🟢 Activo"
@@ -105,21 +195,69 @@ class TerminalDetailActivity : AppCompatActivity() {
     }
 
     private fun queryTerminalStatus() {
-        if (remoteIp == null) {
+        val ip = remoteIp
+        if (ip == null) {
             setupDefaultSwitchStates()
             return
         }
-        val url = "http://$remoteIp:8080/status"
+        val url = "http://$ip:8080/status"
         val request = Request.Builder().url(url).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 Log.e(TAG, "Failed to query terminal status", e)
+                
+                // T54: Reconexión con exponential backoff
+                consecutiveFailures++
+                val backoffMs = when {
+                    consecutiveFailures <= 1 -> 5000L
+                    consecutiveFailures <= 2 -> 10000L
+                    consecutiveFailures <= 3 -> 30000L
+                    else -> 60000L
+                }
+                pollHandler.removeCallbacks(pollRunnable)
+                pollHandler.postDelayed(pollRunnable, backoffMs)
+
+                if (consecutiveFailures * 5000 > 300000) { // >5 min de fallos
+                    runOnUiThread {
+                        binding.tvServiceStatusIndicator.text = "⚠️ Conexión perdida"
+                        binding.tvServiceStatusIndicator.setTextColor(resources.getColor(android.R.color.holo_red_dark, theme))
+                    }
+                    isConnectionLost = true
+                }
+                
+                // T55: Internet fallback
+                if (consecutiveFailures > 6 && NetworkUtils.getConnectionType() == "local") {
+                    if (NetworkUtils.isInternetAvailable(this@TerminalDetailActivity)) {
+                        NetworkUtils.setConnectionType("internet", this@TerminalDetailActivity)
+                        FileLogger.logInfo("TerminalDetail", "Switched to internet fallback")
+                    }
+                }
+
                 runOnUiThread { setupDefaultSwitchStates() }
             }
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     if (it.isSuccessful) {
+                        // T54: Reset failures on success
+                        consecutiveFailures = 0
+                        if (isConnectionLost) {
+                            isConnectionLost = false
+                            runOnUiThread {
+                                binding.tvServiceStatusIndicator.text = "✅ Conectado"
+                                binding.tvServiceStatusIndicator.setTextColor(resources.getColor(R.color.primary, theme))
+                            }
+                            // Restaurar polling normal
+                            pollHandler.removeCallbacks(pollRunnable)
+                            pollHandler.postDelayed(pollRunnable, 5000)
+                        }
+                        
+                        // T55: Switch back to local if we were in internet
+                        if (NetworkUtils.getConnectionType() == "internet") {
+                            NetworkUtils.setConnectionType("local", this@TerminalDetailActivity)
+                            FileLogger.logInfo("TerminalDetail", "Switched back to local")
+                        }
+
                         val json = JSONObject(it.body?.string() ?: "{}")
                         runOnUiThread {
                             isUpdatingFromServer = true
@@ -152,8 +290,8 @@ class TerminalDetailActivity : AppCompatActivity() {
     }
 
     private fun sendCommandToTerminal(command: String) {
-        if (remoteIp == null) return
-        val url = "http://$remoteIp:8080/command"
+        val ip = remoteIp ?: return
+        val url = "http://$ip:8080/command"
         val body = JSONObject().apply { put("command", command) }
             .toString().toRequestBody("application/json".toMediaType())
         client.newCall(Request.Builder().url(url).post(body).build())

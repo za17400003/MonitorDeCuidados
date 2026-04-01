@@ -86,6 +86,7 @@
                             android:contentDescription="@string/cd_call_button">
 
                             <ImageView
+                                android:id="@+id/ivCallIcon"
                                 android:layout_width="48dp"
                                 android:layout_height="48dp"
                                 android:src="@drawable/ic_call_up"
@@ -94,6 +95,7 @@
                                 android:contentDescription="@null" />
 
                             <TextView
+                                android:id="@+id/tvCallLabel"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/call_button"
@@ -302,7 +304,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="@string/alarms"
+                            android:text="@string/reminders_enabled"
                             android:textColor="@color/text_primary" />
 
                         <com.google.android.material.materialswitch.MaterialSwitch

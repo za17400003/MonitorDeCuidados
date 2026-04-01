@@ -131,6 +131,13 @@
             app:defaultValue="true"/>
 
         <Preference
+            app:key="calibrate_voice"
+            app:title="Calibrar Detección de Voz"
+            app:summary="Prueba las 3 palabras de emergencia"
+            app:dependency="voice_detection_enabled"
+            app:icon="@android:drawable/ic_btn_speak_now" />
+
+        <Preference
             android:key="edit_custom_phrases"
             app:title="@string/settings_edit_phrases"/>
     </PreferenceCategory>

@@ -102,16 +102,21 @@ class VideoActivity : AppCompatActivity() {
                             callViewModel.initiateCall(remoteIp ?: "unknown")
                             sendCommandToTerminal("ENABLE_AUDIO")
                             sendCommandToTerminal("ENABLE_VIDEO_CALL")
+                        } else {
+                            // T59: mode="monitor" (silent monitoring) — pedir al Terminal que inicie streaming
+                            sendMonitorRequest()
                         }
                     } else {
                         // Terminal side
                         if (intent.getBooleanExtra("auto_accept", false)) {
-                            callViewModel.acceptCall(remoteIp ?: "unknown")
                             if (isAudioOnly) {
                                 startAudioMode()
                             } else {
                                 videoManager?.startStreaming()
-                                callManager?.startCall()
+                                if (isVideoCallActive) {
+                                    callViewModel.acceptCall(remoteIp ?: "unknown")
+                                    callManager?.startCall()
+                                }
                             }
                         }
                     }
@@ -220,7 +225,7 @@ class VideoActivity : AppCompatActivity() {
             sendCommandToTerminal("DISABLE_AUDIO")
             sendCommandToTerminal("DISABLE_VIDEO_CALL")
             callManager?.stopCall()
-            callViewModel.endCall("monitor_toggled_off")
+            // T60: NO llamar callViewModel.endCall() — solo toggle, no hangup
         }
         updateStatusText()
         updateToggleButtonStyle()
@@ -305,6 +310,25 @@ class VideoActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     Log.e(TAG, "Error closing UDP socket", e)
                 }
+            }
+        }.start()
+    }
+
+    // T59: Pedir al Terminal que inicie streaming
+    private fun sendMonitorRequest() {
+        if (remoteIp == null) return
+        Thread {
+            try {
+                val url = java.net.URL("http://$remoteIp:8080/request_monitor")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 3000
+                conn.doOutput = true
+                conn.outputStream.write("source=monitor".toByteArray())
+                conn.responseCode
+                conn.disconnect()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error requesting monitor streaming", e)
             }
         }.start()
     }

@@ -34,6 +34,15 @@ class BellActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // T56: If role is monitor, this activity should not exist
+        val currentRole = getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE)
+            .getString("user_role", "terminal")
+        if (currentRole == "monitor") {
+            finish()
+            return
+        }
+
         try {
             setupLockscreenFlags()
             
@@ -202,6 +211,13 @@ class BellActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // T56: Dismiss if role switched to monitor while in background
+        val currentRole = getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE)
+            .getString("user_role", "terminal")
+        if (currentRole == "monitor") {
+            finish()
+            return
+        }
         hideSystemBars()
     }
 

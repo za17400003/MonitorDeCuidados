@@ -7,6 +7,7 @@ import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
 import com.example.monitordecuidados.databinding.ActivitySplashBinding
 import com.example.monitordecuidados.utils.EncryptedPreferencesHelper
+import com.example.monitordecuidados.CapabilitiesAssessmentActivity
 import java.util.*
 
 class SplashActivity : AppCompatActivity() {
@@ -45,7 +46,14 @@ class SplashActivity : AppCompatActivity() {
 
             val intent = when (userRole) {
                 "monitor" -> Intent(this, MonitorMainActivity::class.java)
-                "terminal" -> Intent(this, TerminalMainActivity::class.java)
+                "terminal" -> {
+                    val capStatus = EncryptedPreferencesHelper.getString(this, "capabilities_status", "")
+                    if (capStatus == "completed" || capStatus == "omitted") {
+                        Intent(this, TerminalMainActivity::class.java)
+                    } else {
+                        Intent(this, CapabilitiesAssessmentActivity::class.java)
+                    }
+                }
                 else -> Intent(this, OnboardingActivity::class.java)
             }
             

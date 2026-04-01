@@ -1,8 +1,8 @@
-# ✅ PLAN DE PRUEBAS v2.3 - Monitor de Cuidados
+# ✅ PLAN DE PRUEBAS v2.4 - Monitor de Cuidados
 
-**Última actualización**: Marzo 29, 2026  
-**Versión**: 2.3 (Actualización: PHASE 7 Battery Low Notification Tests + PHASE 5-6 Completion)  
-**Estado**: PHASE 5-6 Complete | PHASE 7 Battery Tests Ready
+**Última actualización**: Abril 1, 2026  
+**Versión**: 2.4 (Consolidación T44-T56 desde WorkItems)  
+**Estado**: T14-T56 CÓDIGO ✅ BUILD ✅ | Testing dispositivo parcial
 
 ---
 
@@ -1266,6 +1266,188 @@ Realizar "Full Regression Test" con dos dispositivos reales en MISMA RED WI-FI. 
 | ⬜ FLAG_DISMISS_KEYGUARD ELIMINADO | BellActivity.kt bloque legacy |
 | ⬜ Import KeyguardManager ELIMINADO | BellActivity.kt |
 | ⬜ hideSystemBars() existe | WindowInsetsController API 30+ y fallback legacy |
+
+---
+
+## ✅ VERIFICACIÓN POST-GEMINI — Abril 1, 2026 (Ronda T44-T56)
+
+**Verificador**: Copilot  
+**Build**: ✅ SUCCESSFUL  
+**Collateral damage**: ✅ 17 archivos en git diff, todos esperados  
+
+### T44: CapabilitiesAssessment routing (3 entry points) — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ OnboardingActivity verifica capabilities_status | `finishOnboarding()` redirige a CapabilitiesAssessmentActivity si no completed/omitted |
+| ✅ RoleSelectorActivity verifica capabilities_status | `cardPatient` handler redirige según status |
+| ✅ SplashActivity verifica capabilities_status | Rama "terminal" redirige según status |
+| **Archivos**: OnboardingActivity.kt, RoleSelectorActivity.kt, SplashActivity.kt ||
+
+| Test dispositivo | Qué verificar |
+|-----------------|---------------|
+| ❌ Terminal sin capabilities_status | → va a CapabilitiesAssessmentActivity |
+| ❌ Terminal con status=completed | → va directo a TerminalMainActivity |
+| ❌ Switch a terminal (RoleSelector) sin capabilities | → va a CapabilitiesAssessmentActivity |
+
+### T45: Walkie-talkie in-place (btnCall toggle) — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ btnCall NO abre VideoActivity | Usa CallManager directo en TerminalDetailActivity |
+| ✅ CallManager(ip, 5060) instanciado | En click handler |
+| ✅ Toggle Llamar↔Colgar | isCallActive flag + UI update (texto + color + icono) |
+| ✅ onDestroy limpia CallManager | callManager?.stopCall() |
+| **Archivo**: TerminalDetailActivity.kt ||
+
+| Test dispositivo | Qué verificar |
+|-----------------|---------------|
+| ❌ Botón "Llamar" cambia a "Colgar" | Tap en Llamar → icono rojo + texto "Colgar" |
+| ❌ Segundo tap termina llamada | Tap en Colgar → icono teal + texto "Llamar" |
+| ❌ NO abre otra Activity | Se queda en la misma pantalla |
+
+### T46: CampanaService startAudioCall/stopAudioCall — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ startAudioCall() usa CallManager real | Lee paired_monitor_ip, crea CallManager, llama startCall() |
+| ✅ stopAudioCall() limpia | stopCall() + null + updateNotification() |
+| ✅ T46-FIX nullable safe | `monitorIp?.isNotEmpty() == true` (smart-cast) |
+| **Archivo**: CampanaService.kt ||
+
+### T47: Migración OPUS (CallManager 16kHz MediaCodec) — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ SAMPLE_RATE = 16000 | Constante actualizada |
+| ✅ sendAudio() usa MediaCodec encoder OPUS | audio/opus codec |
+| ✅ receiveAudio() usa MediaCodec decoder OPUS | audio/opus codec |
+| ✅ UDP packets son frames OPUS | No PCM raw |
+| **Archivo**: CallManager.kt ||
+
+| Test dispositivo | Qué verificar |
+|-----------------|---------------|
+| ❌ Audio bidireccional | Monitor habla → Terminal escucha Y viceversa |
+| ❌ Calidad aceptable | Sin distorsión excesiva a 16kHz |
+| ❌ Latencia <500ms | Conversación fluida |
+
+### T48: call_history Firestore — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ Documento creado al iniciar llamada | caller_id, receiver_id, start_time, call_type, status |
+| ✅ Documento actualizado al colgar | end_time + status="completed" |
+| ✅ currentCallDocId tracking | Se limpia al colgar |
+| **Archivo**: TerminalDetailActivity.kt ||
+
+| Test dispositivo | Qué verificar |
+|-----------------|---------------|
+| ❌ Firestore call_history | Iniciar llamada → documento aparece en consola Firebase |
+| ❌ end_time al colgar | Colgar → documento actualizado |
+
+### T49: CalibrationDialog en SettingsFragment — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ Preference "calibrate_voice" en root_preferences.xml | Con dependency=voice_detection_enabled |
+| ✅ Click listener en SettingsFragment | CalibrationDialog().show(parentFragmentManager) |
+| **Archivos**: root_preferences.xml, SettingsFragment.kt ||
+
+| Test dispositivo | Qué verificar |
+|-----------------|---------------|
+| ❌ Botón visible en Settings | "Calibrar Detección de Voz" bajo Sensores |
+| ❌ Deshabilitado sin voz | Con voice_detection OFF, botón gris |
+| ❌ Dialog abre | Tap → dialog con "AUXILIO" como primera palabra |
+
+### T50: VoiceAlertAdapter 6 bindings — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ 6 vistas bindeadas | ivAlertIcon, tvTerminalName, tvAlertMessage, tvAlertTime, btnCall, btnMonitor |
+| ✅ VoiceAlertListener interface | onCallClicked + onMonitorClicked |
+| **Archivo**: VoiceAlertAdapter.kt ||
+
+### T51: AlertAdapter consolidado (NotificationAlertAdapter) — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ Inner class eliminada de AlertLogActivity | Usa NotificationAlertAdapter |
+| ✅ Inner class eliminada de HistoryFragment | Usa NotificationAlertAdapter |
+| **Archivos**: AlertLogActivity.kt, HistoryFragment.kt ||
+
+### T52: remote_ip fix en serverListener callbacks — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ onCallRequested incluye putExtra("remote_ip", sourceIp) | Intent a VideoActivity |
+| ✅ onMonitorRequested incluye putExtra("remote_ip", sourceIp) | Intent a VideoActivity |
+| ✅ onBellTriggered pasa sourceIp a notifyAlert | 5to parámetro |
+| ✅ onVoiceTriggered pasa sourceIp a notifyAlert | 5to parámetro |
+| ✅ onShakeTriggered pasa sourceIp a notifyAlert | 5to parámetro |
+| **Archivo**: CampanaService.kt ||
+
+### T53: Battery monitoring (≤15% alerta al Monitor) — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ checkBatteryLevel() método | Hysteresis: ≤15% alerta, >20% reset |
+| ✅ batteryCheckHandler cada 60s | Handler + Runnable en ROLE_TERMINAL |
+| ✅ HTTP POST a Monitor /trigger_bell | Con mensaje "Batería baja" |
+| **Archivo**: CampanaService.kt ||
+
+| Test dispositivo | Qué verificar |
+|-----------------|---------------|
+| ❌ Batería ≤15% → notificación en Monitor | Simular batería baja |
+| ❌ No re-alerta entre 15-20% | Hysteresis correcta |
+
+### T54: Exponential backoff (5s→10s→30s→60s) — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ consecutiveFailures tracking | Variable en TerminalDetailActivity |
+| ✅ Backoff dinámico | 5s→10s→30s→60s según fallos |
+| ✅ "⚠️ Conexión perdida" después de 5 min | isConnectionLost flag |
+| ✅ Reset al reconectar | consecutiveFailures=0, polling=5s |
+| **Archivo**: TerminalDetailActivity.kt ||
+
+| Test dispositivo | Qué verificar |
+|-----------------|---------------|
+| ❌ Terminal OFF → polling se espacía | Desconectar Terminal → verificar intervalos |
+| ❌ Terminal ON → polling vuelve a 5s | Reconectar → indicador verde |
+| ❌ >5 min sin conexión | Texto "⚠️ Conexión perdida" visible |
+
+### T55: Internet fallback + NetworkUtils expanded — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ NetworkUtils.initConnectionType() | Persistido en SharedPrefs |
+| ✅ registerNetworkCallback | En CampanaService.onCreate() |
+| ✅ unregisterNetworkCallback | En CampanaService.onDestroy() |
+| ✅ isInternetAvailable() | ConnectivityManager check |
+| ✅ Fallback tras 30s | consecutiveFailures > 6 → switch to internet |
+| ✅ Auto-switch back | Local funciona → vuelve a "local" |
+| **Archivos**: NetworkUtils.kt, CampanaService.kt, TerminalDetailActivity.kt ||
+
+| Test dispositivo | Qué verificar |
+|-----------------|---------------|
+| ❌ WiFi local primero | Dispositivos en misma red → comunicación HTTP directa |
+| ❌ Fallback a internet | Redes diferentes → switch a internet |
+| ❌ Auto-switch back | Volver a misma red → regresa a local |
+
+### T56: Role-switch cleanup — CÓDIGO ✅
+
+| Criterio | Verificación |
+|----------|-------------|
+| ✅ onDestroy cancela notificación lockscreen | nm.cancel(LOCKSCREEN_NOTIFICATION_ID) |
+| ✅ BellActivity verifica rol en onCreate | Si rol="monitor" → finish() |
+| ✅ BellActivity verifica rol en onResume | Si rol="monitor" → finish() |
+| **Archivos**: CampanaService.kt, BellActivity.kt ||
+
+| Test dispositivo | Qué verificar |
+|-----------------|---------------|
+| ❌ Switch Terminal→Monitor | BellActivity NO persiste en lockscreen |
+| ❌ Notificación limpia | Notificación lockscreen (ID=2) desaparece |
+| ❌ Re-switch Monitor→Terminal | BellActivity vuelve a funcionar |
 | ⬜ hideSystemBars() en onCreate y onResume | BellActivity.kt |
 | ⬜ userPresentReceiver registrado | ACTION_USER_PRESENT → finish() |
 | ⬜ onDestroy() desregistra receiver | BellActivity.kt |

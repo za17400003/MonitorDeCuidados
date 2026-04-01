@@ -12,16 +12,16 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.SocketTimeoutException
+import java.nio.ByteBuffer
 
 /**
  * Manages audio calls between Monitor and Terminal.
  * Uses UDP for low-latency transmission.
- *
- * SPEC STABIL-02, DOC-01
+ * Migrated to OPUS codec in T47.
  */
 class CallManager(@NonNull private val remoteIp: String, private val port: Int) {
     private val TAG = "CallManager"
-    private val SAMPLE_RATE = 8000
+    private val SAMPLE_RATE = 16000 // T47: Increased to 16kHz for Opus
     private val CHANNEL_CONFIG_IN = AudioFormat.CHANNEL_IN_MONO
     private val CHANNEL_CONFIG_OUT = AudioFormat.CHANNEL_OUT_MONO
     private val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
@@ -48,10 +48,6 @@ class CallManager(@NonNull private val remoteIp: String, private val port: Int) 
         }
     }
 
-    /**
-     * Starts the audio call.
-     * Initializes sockets and audio threads.
-     */
     fun startCall() {
         if (isCalling) return
         isCalling = true
@@ -99,9 +95,6 @@ class CallManager(@NonNull private val remoteIp: String, private val port: Int) 
         }.start()
     }
 
-    /**
-     * Stops the audio call and releases resources.
-     */
     fun stopCall() {
         FileLogger.logInfo(TAG, "Deteniendo llamada...")
         isCalling = false
@@ -124,6 +117,7 @@ class CallManager(@NonNull private val remoteIp: String, private val port: Int) 
     @SuppressLint("MissingPermission")
     private fun sendAudio() {
         var recorder: AudioRecord? = null
+        var encoder: MediaCodec? = null
         try {
             recorder = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_COMMUNICATION, 
@@ -138,29 +132,56 @@ class CallManager(@NonNull private val remoteIp: String, private val port: Int) 
                 return
             }
 
-            val buffer = ByteArray(640)
+            // T47: OPUS Encoder setup
+            val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_OPUS, SAMPLE_RATE, 1)
+            format.setInteger(MediaFormat.KEY_BIT_RATE, 16000)
+            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)
+            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            encoder.start()
+
+            val pcmBuffer = ByteArray(960 * 2) // 60ms at 16kHz
             val address = InetAddress.getByName(remoteIp)
             
             recorder.startRecording()
+            val bufferInfo = MediaCodec.BufferInfo()
             
             while (isCalling && !Thread.currentThread().isInterrupted) {
-                val read = recorder.read(buffer, 0, buffer.size)
-                if (read > 0 && socket != null && !socket!!.isClosed) {
-                    val packet = DatagramPacket(buffer, read, address, port)
-                    socket?.send(packet)
+                val read = recorder.read(pcmBuffer, 0, pcmBuffer.size)
+                if (read > 0) {
+                    val inputIndex = encoder.dequeueInputBuffer(1000)
+                    if (inputIndex >= 0) {
+                        val inputBuffer = encoder.getInputBuffer(inputIndex)
+                        inputBuffer?.clear()
+                        inputBuffer?.put(pcmBuffer, 0, read)
+                        encoder.queueInputBuffer(inputIndex, 0, read, System.nanoTime() / 1000, 0)
+                    }
+                }
+
+                var outputIndex = encoder.dequeueOutputBuffer(bufferInfo, 1000)
+                while (outputIndex >= 0) {
+                    val outputBuffer = encoder.getOutputBuffer(outputIndex)
+                    if (outputBuffer != null && socket != null && !socket!!.isClosed) {
+                        val opusData = ByteArray(bufferInfo.size)
+                        outputBuffer.get(opusData)
+                        val packet = DatagramPacket(opusData, opusData.size, address, port)
+                        socket?.send(packet)
+                    }
+                    encoder.releaseOutputBuffer(outputIndex, false)
+                    outputIndex = encoder.dequeueOutputBuffer(bufferInfo, 0)
                 }
             }
         } catch (e: Exception) {
-            FileLogger.logCritical(TAG, "Error en transmisión de audio", e)
+            FileLogger.logCritical(TAG, "Error en transmisión de audio (Opus)", e)
             Log.e(TAG, "Error in audio transmission", e)
         } finally {
             try {
                 recorder?.stop()
                 recorder?.release()
+                encoder?.stop()
+                encoder?.release()
             } catch (e: Exception) {
-                Log.e(TAG, "Error releasing recorder", e)
+                Log.e(TAG, "Error releasing recorder/encoder", e)
             }
-            FileLogger.logInfo(TAG, "Transmisión finalizada")
         }
     }
 
@@ -178,6 +199,7 @@ class CallManager(@NonNull private val remoteIp: String, private val port: Int) 
 
     private fun receiveAudio() {
         var player: AudioTrack? = null
+        var decoder: MediaCodec? = null
         try {
             player = AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder()
@@ -198,13 +220,20 @@ class CallManager(@NonNull private val remoteIp: String, private val port: Int) 
                 return
             }
 
-            val buffer = ByteArray(2048)
+            // T47: OPUS Decoder setup
+            val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_OPUS, SAMPLE_RATE, 1)
+            decoder = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)
+            decoder.configure(format, null, null, 0)
+            decoder.start()
+
+            val udpBuffer = ByteArray(2048)
             val localIp = NetworkUtils.getLocalIpAddress()
+            val bufferInfo = MediaCodec.BufferInfo()
             
             player.play()
             
             while (isCalling && !Thread.currentThread().isInterrupted) {
-                val packet = DatagramPacket(buffer, buffer.size)
+                val packet = DatagramPacket(udpBuffer, udpBuffer.size)
                 try {
                     socket?.receive(packet)
                     
@@ -213,7 +242,25 @@ class CallManager(@NonNull private val remoteIp: String, private val port: Int) 
                     }
 
                     if (packet.address.hostAddress != localIp) {
-                        player.write(packet.data, 0, packet.length)
+                        val inputIndex = decoder.dequeueInputBuffer(1000)
+                        if (inputIndex >= 0) {
+                            val inputBuffer = decoder.getInputBuffer(inputIndex)
+                            inputBuffer?.clear()
+                            inputBuffer?.put(packet.data, 0, packet.length)
+                            decoder.queueInputBuffer(inputIndex, 0, packet.length, System.nanoTime() / 1000, 0)
+                        }
+
+                        var outputIndex = decoder.dequeueOutputBuffer(bufferInfo, 1000)
+                        while (outputIndex >= 0) {
+                            val outputBuffer = decoder.getOutputBuffer(outputIndex)
+                            if (outputBuffer != null) {
+                                val pcmData = ByteArray(bufferInfo.size)
+                                outputBuffer.get(pcmData)
+                                player.write(pcmData, 0, pcmData.size)
+                            }
+                            decoder.releaseOutputBuffer(outputIndex, false)
+                            outputIndex = decoder.dequeueOutputBuffer(bufferInfo, 0)
+                        }
                     }
                 } catch (e: SocketTimeoutException) {
                     FileLogger.logWarning(TAG, "Receive timeout, connection might be lost")
@@ -223,16 +270,17 @@ class CallManager(@NonNull private val remoteIp: String, private val port: Int) 
                 }
             }
         } catch (e: Exception) {
-            FileLogger.logCritical(TAG, "Error en recepción de audio", e)
+            FileLogger.logCritical(TAG, "Error en recepción de audio (Opus)", e)
             Log.e(TAG, "Error in audio reception", e)
         } finally {
             try {
                 player?.stop()
                 player?.release()
+                decoder?.stop()
+                decoder?.release()
             } catch (e: Exception) {
-                Log.e(TAG, "Error releasing player", e)
+                Log.e(TAG, "Error releasing player/decoder", e)
             }
-            FileLogger.logInfo(TAG, "Recepción finalizada")
         }
     }
 }

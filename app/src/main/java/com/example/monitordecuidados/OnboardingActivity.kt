@@ -60,7 +60,12 @@ class OnboardingActivity : AppCompatActivity() {
         val targetActivity = if (userRole == "monitor") {
             MonitorMainActivity::class.java
         } else {
-            TerminalMainActivity::class.java
+            val capStatus = EncryptedPreferencesHelper.getString(this, "capabilities_status", "")
+            if (capStatus == "completed" || capStatus == "omitted") {
+                TerminalMainActivity::class.java
+            } else {
+                CapabilitiesAssessmentActivity::class.java
+            }
         }
         startActivity(Intent(this, targetActivity))
         finish()

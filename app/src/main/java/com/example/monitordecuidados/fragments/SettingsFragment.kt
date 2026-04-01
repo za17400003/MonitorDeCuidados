@@ -13,6 +13,7 @@ import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
 import com.example.monitordecuidados.*
+import com.example.monitordecuidados.dialogs.CalibrationDialog
 import com.example.monitordecuidados.dialogs.CreateAlarmDialog
 import com.example.monitordecuidados.dialogs.CustomPhrasesDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -111,6 +112,11 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
 
         findPreference<Preference>("edit_custom_phrases")?.setOnPreferenceClickListener {
             CustomPhrasesDialog().show(parentFragmentManager, "custom_phrases")
+            true
+        }
+
+        findPreference<Preference>("calibrate_voice")?.setOnPreferenceClickListener {
+            CalibrationDialog().show(parentFragmentManager, "calibration")
             true
         }
 

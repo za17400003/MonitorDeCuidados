@@ -4,6 +4,8 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.example.monitordecuidados.databinding.ActivityRoleSelectorBinding
+import com.example.monitordecuidados.utils.EncryptedPreferencesHelper
+import com.example.monitordecuidados.CapabilitiesAssessmentActivity
 
 class RoleSelectorActivity : AppCompatActivity() {
 
@@ -28,7 +30,15 @@ class RoleSelectorActivity : AppCompatActivity() {
             saveRole("terminal")
             // TASK #1: Reinitialize connections after role switch
             reinitializeConnections()
-            val intent = Intent(this, TerminalMainActivity::class.java)
+
+            val capStatus = EncryptedPreferencesHelper.getString(this, "capabilities_status", "")
+            val targetClass = if (capStatus == "completed" || capStatus == "omitted") {
+                TerminalMainActivity::class.java
+            } else {
+                CapabilitiesAssessmentActivity::class.java
+            }
+
+            val intent = Intent(this, targetClass)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
             finish()

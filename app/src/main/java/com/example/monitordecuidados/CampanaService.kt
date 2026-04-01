@@ -11,10 +11,13 @@ import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import com.example.monitordecuidados.communication.CampanaHttpServer
+import com.example.monitordecuidados.communication.CallManager
 import com.example.monitordecuidados.communication.VoiceCommandManager
 import com.example.monitordecuidados.data.local.AppDatabase
 import com.example.monitordecuidados.data.local.Event
 import com.example.monitordecuidados.logging.FileLogger
+import com.example.monitordecuidados.utils.EncryptedPreferencesHelper
+import com.example.monitordecuidados.utils.NetworkUtils
 import com.example.monitordecuidados.utils.NotificationHelper
 import com.example.monitordecuidados.utils.StringsLocalizationManager
 import kotlinx.coroutines.CoroutineScope
@@ -74,23 +77,43 @@ class CampanaService : Service(), SensorEventListener {
     private val serviceScope = CoroutineScope(Dispatchers.IO)
     private val TAG = "CampanaService"
 
+    // T46: CallManager instance
+    private var callManager: CallManager? = null
+
+    // T53: Battery monitoring
+    private var lastBatteryAlertState: String = "ok" // "ok" | "low"
+    private val batteryCheckHandler = Handler(Looper.getMainLooper())
+    private val batteryCheckRunnable = object : Runnable {
+        override fun run() {
+            checkBatteryLevel()
+            batteryCheckHandler.postDelayed(this, 60000)
+        }
+    }
+
     private val serverListener = object : CampanaHttpServer.OnServerEventListener {
         override fun onBellTriggered(sourceIp: String) {
-            NotificationHelper.notifyAlert(this@CampanaService, "🔔 Campana", "Se ha pedido ayuda desde Terminal", "bell")
+            NotificationHelper.notifyAlert(this@CampanaService, "🔔 Campana", "Se ha pedido ayuda desde Terminal", "bell", sourceIp)
         }
         override fun onVoiceTriggered(text: String, sourceIp: String) {
-            NotificationHelper.notifyAlert(this@CampanaService, "🎙️ Voz", text, "voice")
+            NotificationHelper.notifyAlert(this@CampanaService, "🎙️ Voz", text, "voice", sourceIp)
         }
+        
+        // T58: Walkie-talkie side for Terminal
         override fun onCallRequested(sourceIp: String) {
-            val intent = Intent(this@CampanaService, VideoActivity::class.java).apply {
-                putExtra("mode", "videocall")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
+            FileLogger.logInfo(TAG, "onCallRequested from $sourceIp — starting walkie-talkie")
+            callManager?.stopCall()
+            callManager = CallManager(sourceIp, 5060)
+            callManager?.startCall()
+            isAudioCallActive = true
+            updateNotification()
         }
+        
+        // T59: Silent monitor request with auto-accept
         override fun onMonitorRequested(sourceIp: String) {
             val intent = Intent(this@CampanaService, VideoActivity::class.java).apply {
                 putExtra("mode", "monitor")
+                putExtra("remote_ip", sourceIp)
+                putExtra("auto_accept", true)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             startActivity(intent)
@@ -107,20 +130,34 @@ class CampanaService : Service(), SensorEventListener {
                 "SET_VOICE_OFF" -> prefs.edit().putBoolean("voice_detection_enabled", false).apply()
                 "SET_ALARMS_ON" -> prefs.edit().putBoolean("reminders_enabled", true).apply()
                 "SET_ALARMS_OFF" -> prefs.edit().putBoolean("reminders_enabled", false).apply()
+                // T58: Stop audio call command
+                "STOP_AUDIO_CALL" -> {
+                    callManager?.stopCall()
+                    callManager = null
+                    isAudioCallActive = false
+                    updateNotification()
+                    return
+                }
                 else -> return // Comandos desconocidos se ignoran
             }
             // Aplicar cambio inmediatamente en main thread
             Handler(Looper.getMainLooper()).post { refreshServices() }
         }
 
+        // T57: Pairing diagnostics
         override fun onPairingConfirmed(sourceIp: String, monitorName: String) {
+            FileLogger.logInfo(TAG, "onPairingConfirmed: sourceIp=$sourceIp, monitorName=$monitorName")
             getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE).edit()
                 .putString("paired_monitor_ip", sourceIp)
                 .putString("paired_monitor_name", monitorName)
                 .apply()
+            // Verificar que se guardó
+            val saved = getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE)
+                .getString("paired_monitor_ip", null)
+            FileLogger.logInfo(TAG, "paired_monitor_ip saved as: $saved")
         }
         override fun onShakeTriggered(sourceIp: String) {
-            NotificationHelper.notifyAlert(this@CampanaService, "⚠️ Caída detectada", "Movimiento brusco en Terminal", "shake")
+            NotificationHelper.notifyAlert(this@CampanaService, "⚠️ Caída detectada", "Movimiento brusco en Terminal", "shake", sourceIp)
         }
 
         override fun onStatusRequested(): JSONObject {
@@ -152,8 +189,20 @@ class CampanaService : Service(), SensorEventListener {
             setupScreenOffReceiver()
             startHttpServer()
             setupVoiceDetection()
+            // T53: Start battery monitoring
+            batteryCheckHandler.post(batteryCheckRunnable)
         } else if (userRole == ROLE_MONITOR) {
             startHttpServer()
+        }
+
+        // T55: Init NetworkUtils
+        NetworkUtils.initConnectionType(this)
+        NetworkUtils.registerNetworkCallback(this) { hasInternet ->
+            if (!hasInternet) {
+                FileLogger.logWarning(TAG, "Network lost")
+            } else {
+                FileLogger.logInfo(TAG, "Network available")
+            }
         }
 
         startForeground(1, createServiceNotification())
@@ -324,7 +373,8 @@ class CampanaService : Service(), SensorEventListener {
                         connection.connectTimeout = 3000
                         connection.doOutput = true
                         connection.outputStream.write("status=triggered".toByteArray())
-                        connection.responseCode
+                        val responseCode = connection.responseCode
+                        FileLogger.logInfo(TAG, "Shake alert sent to $monitorIp, response: $responseCode")
                         connection.disconnect()
                     } catch (e: Exception) {
                         Log.e(TAG, "Error sending shake to Monitor", e)
@@ -353,7 +403,8 @@ class CampanaService : Service(), SensorEventListener {
                         connection.doOutput = true
                         val json = JSONObject().apply { put("text", keyword) }
                         connection.outputStream.write(json.toString().toByteArray())
-                        connection.responseCode
+                        val responseCode = connection.responseCode
+                        FileLogger.logInfo(TAG, "Voice alert sent to $monitorIp, response: $responseCode")
                         connection.disconnect()
                     } catch (e: Exception) {
                         Log.e(TAG, "Error sending voice alert to Monitor", e)
@@ -393,7 +444,8 @@ class CampanaService : Service(), SensorEventListener {
                         connection.connectTimeout = 3000
                         connection.doOutput = true
                         connection.outputStream.write("type=bell&source=terminal".toByteArray())
-                        connection.responseCode
+                        val responseCode = connection.responseCode
+                        FileLogger.logInfo(TAG, "Bell alert sent to $monitorIp, response: $responseCode")
                         connection.disconnect()
                     } catch (e: Exception) {
                         Log.e(TAG, "Error sending bell to Monitor", e)
@@ -409,13 +461,22 @@ class CampanaService : Service(), SensorEventListener {
         }
     }
 
+    // T46: Real startAudioCall
     private fun startAudioCall() {
         isAudioCallActive = true
         updateNotification()
+        val monitorIp = EncryptedPreferencesHelper.getString(this, "paired_monitor_ip", "")
+        if (monitorIp?.isNotEmpty() == true) { // Fixed T46 build error
+            callManager = CallManager(monitorIp, 5060)
+            callManager?.startCall()
+        }
     }
 
+    // T46: Real stopAudioCall
     private fun stopAudioCall() {
         isAudioCallActive = false
+        callManager?.stopCall()
+        callManager = null
         updateNotification()
     }
 
@@ -467,16 +528,57 @@ class CampanaService : Service(), SensorEventListener {
         return builder.build()
     }
 
+    // T53: checkBatteryLevel
+    private fun checkBatteryLevel() {
+        val bm = getSystemService(BATTERY_SERVICE) as android.os.BatteryManager
+        val level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        
+        if (level <= 15 && lastBatteryAlertState == "ok") {
+            lastBatteryAlertState = "low"
+            // Enviar HTTP POST al Monitor para que muestre notificación
+            val monitorIp = getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE)
+                .getString("paired_monitor_ip", "") ?: ""
+            if (monitorIp.isNotEmpty()) {
+                serviceScope.launch {
+                    try {
+                        val url = java.net.URL("http://$monitorIp:8080/trigger_bell")
+                        val conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.requestMethod = "POST"
+                        conn.setRequestProperty("Content-Type", "application/json")
+                        conn.doOutput = true
+                        conn.outputStream.write("{\"message\":\"🔋 Batería baja ($level%)\",\"type\":\"battery_low\"}".toByteArray())
+                        conn.responseCode
+                        conn.disconnect()
+                    } catch (e: Exception) {
+                        FileLogger.logWarning(TAG, "Error sending battery_low alert: ${e.message}")
+                    }
+                }
+            }
+        } else if (level > 20 && lastBatteryAlertState == "low") {
+            lastBatteryAlertState = "ok"
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
+        // T56: Cancel lockscreen notification to prevent persistence after role switch
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        nm.cancel(LOCKSCREEN_NOTIFICATION_ID)
+
         server?.stop()
         voiceCommandManager?.stopListening()
         screenOffReceiver?.let {
             try { unregisterReceiver(it) } catch (_: Exception) {}
         }
         sensorManager?.unregisterListener(this)
+        // T53: Stop battery monitoring
+        batteryCheckHandler.removeCallbacks(batteryCheckRunnable)
+        // T55: Unregister network callback
+        NetworkUtils.unregisterNetworkCallback(this)
+        // T46: End call
+        callManager?.stopCall()
     }
 }

@@ -66,6 +66,7 @@
     <string name="alarms">Alarmas</string>
     <string name="shake_detection">Activación por Agitación</string>
     <string name="pairing_in_progress">Vinculando...</string>
+    <string name="reminders_enabled">Habilitar Recordatorios</string>
 
     <string name="change_mode">Cambiar Modo</string>
     <string name="scan_qr">Escanear QR</string>

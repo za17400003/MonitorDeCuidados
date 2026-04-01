@@ -1,21 +1,14 @@
 package com.example.monitordecuidados
 
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.example.monitordecuidados.databinding.ActivityAlertLogBinding
-import com.example.monitordecuidados.models.NotificationItem
 import com.example.monitordecuidados.models.NotificationState
 import com.example.monitordecuidados.viewmodels.NotificationViewModel
-import java.text.SimpleDateFormat
-import java.util.*
+import com.example.monitordecuidados.adapters.NotificationAlertAdapter
 
 /**
  * Muestra el historial de alertas con identificación de terminal.
@@ -25,7 +18,7 @@ class AlertLogActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityAlertLogBinding
     private val notificationViewModel: NotificationViewModel by viewModels()
-    private lateinit var adapter: AlertAdapter
+    private lateinit var adapter: NotificationAlertAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,7 +29,7 @@ class AlertLogActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.toolbar.setNavigationOnClickListener { finish() }
 
-        adapter = AlertAdapter()
+        adapter = NotificationAlertAdapter()
         binding.rvAlerts.layoutManager = LinearLayoutManager(this)
         binding.rvAlerts.adapter = adapter
 
@@ -62,37 +55,6 @@ class AlertLogActivity : AppCompatActivity() {
                 }
                 else -> {}
             }
-        }
-    }
-
-    class AlertAdapter : RecyclerView.Adapter<AlertAdapter.ViewHolder>() {
-        private var items = listOf<NotificationItem>()
-
-        fun submitList(newItems: List<NotificationItem>) {
-            items = newItems
-            notifyDataSetChanged()
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_alert_campana, parent, false)
-            return ViewHolder(view)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val item = items[position]
-            val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-            
-            holder.tvTerminalName?.text = item.title
-            holder.tvAlertMessage.text = item.body
-            holder.tvAlertTime.text = item.timestamp?.let { sdf.format(it.toDate()) } ?: ""
-        }
-
-        override fun getItemCount() = items.size
-
-        class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val tvTerminalName: TextView? = view.findViewById(R.id.tvTerminalName)
-            val tvAlertMessage: TextView = view.findViewById(R.id.tvAlertMessage)
-            val tvAlertTime: TextView = view.findViewById(R.id.tvAlertTime)
         }
     }
 }

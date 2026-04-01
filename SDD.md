@@ -1,8 +1,8 @@
 # 🛠️ DOCUMENTACIÓN TÉCNICA v3.0 - Monitor de Cuidados
 
 **Última actualización**: Abril 1, 2026  
-**Versión**: 3.2 (Auditoría: Sincronización código↔docs, schema Firestore completo, arquitectura single-APK, walkie-talkie corregido, CalibrationDialog+VoiceAlertAdapter documentados)  
-**Estado**: Arquitectura Completa - Sincronizado con SRS v3.1
+**Versión**: 3.4 (T44-T56 implementados. 5 bugs encontrados en testing dispositivo real: T57-T61 pendientes. Bell chime migrado a MP3)  
+**Estado**: Arquitectura Completa - 5 bugs de integración pendientes (WorkItems v15.0)
 
 ---
 
@@ -11,9 +11,10 @@
 ### Capa de Aplicación
 - **App Única (`:app`) — Dual-Role**: Una sola APK con dos modalidades seleccionables al inicio:
   - **Modo Monitor (Cuidador)**: Gestiona la supervisión, alertas, visualización de video, control remoto de switches del Terminal.
-  - **Modo Terminal (Persona Cuidada)**: Ejecuta CampanaService (detección de campana, voz, agitación), muestra QR para vinculación, overlay de campana en lockscreen.
+  - **Modo Terminal (Persona Cuidada)**: Ejecuta CampanaService (detección de campana, voz, agitación, batería baja T53), muestra QR para vinculación, overlay de campana en lockscreen.
 - **Selección de rol**: En onboarding (primera vez) o RoleSelectorActivity (cambio posterior). Se guarda en SharedPreferences como `app_mode` = "monitor" | "terminal".
 - **Navegación por rol**: SplashActivity lee `app_mode` y redirige a MonitorMainActivity o TerminalMainActivity.
+- **Evaluación geriátrica (T44)**: Los 3 puntos de entrada Terminal (OnboardingActivity, RoleSelectorActivity, SplashActivity) verifican `capabilities_status` en SharedPreferences. Si NO es "completed"/"omitted", redirigen a CapabilitiesAssessmentActivity antes de TerminalMainActivity.
 
 ### Capa de Comunicación (Protocolos)
 - **Networking Local**: Uso de `NanoHTTPD` para servidores HTTP integrados en ambos dispositivos.
@@ -428,26 +429,29 @@ Una vez emparejados vía QR, los dispositivos pueden establecer conexión. Este 
 5. Monitor y Terminal intercambian IPs públicas para futuras comunicaciones directas
 6. Si pairing token INVÁLIDO → Conexión rechazada, requiere re-emparejamiento por QR
 
-**Fase 3: Exponential Backoff (5s → 10s → 30s → 60s)**
-1. Si establecimientos fallidos: reintentar con delays incrementales
-2. Máximo 5 reintentos antes de asumir desconexión
+**Fase 3: Exponential Backoff (5s → 10s → 30s → 60s)** ✅ T54 implementado
+1. TerminalDetailActivity.queryTerminalStatus() incrementa `consecutiveFailures` en cada fallo HTTP
+2. Backoff: 1 fallo=5s, 2=10s, 3=30s, 4+=60s. Reset a 0 en éxito.
+3. Si fallos superan 5 min → muestra "⚠️ Conexión perdida" en rojo
+4. Al reconectar → restaura "✅ Conectado" y polling normal 5s
 
-**Fase 4: Almacenamiento de Connection Type**
+**Fase 4: Almacenamiento de Connection Type** ✅ T55 implementado
 ```kotlin
-// En SharedPreferences
-val connectionType = "local" | "internet"
-prefs.edit().putString("connection_type", connectionType).apply()
-
-// En Firestore
-db.collection("pairings")
-  .document(monitorId)
-  .update("connectionType", connectionType)
+// NetworkUtils.kt — connection type tracking
+private var currentConnectionType: String = "local" // "local" | "internet"
+fun getConnectionType(): String
+fun setConnectionType(type: String, context: Context) // persiste en SharedPrefs
+fun initConnectionType(context: Context) // lee de SharedPrefs al inicio
+fun registerNetworkCallback(context: Context, onChanged: (Boolean) -> Unit) // NetworkCallback
+fun unregisterNetworkCallback(context: Context)
+fun isInternetAvailable(context: Context): Boolean
 ```
 
-**Fase 5: Switchover Automático**
-- Monitor verifica cada 30 segundos si Terminal ahora está en red local (aún si usa internet)
-- Si cambio detectado: actualiza connectionType y rutea futuras llamadas/video vía nuevo camino
-- No interrumpe comunicación activa (solo usa nuevo camino para nuevas conexiones)
+**Fase 5: Switchover Automático** ✅ T55 implementado
+- TerminalDetailActivity: Si `consecutiveFailures > 6` y connectionType=="local" y hay internet → auto-switch a "internet"
+- Al recibir respuesta exitosa estando en "internet" → auto-switch back a "local"
+- CampanaService.onCreate() inicializa NetworkUtils + registra NetworkCallback
+- CampanaService.onDestroy() desregistra NetworkCallback
 
 ### Protocolos de Comunicación por Network Type
 
@@ -456,7 +460,7 @@ db.collection("pairings")
 - Comandos JSON HTTP: Puerto 8080
 - Consulta estado Terminal: GET `/status` Puerto 8080 (retorna JSON: batteryLevel, bellEnabled, shakeEnabled, voiceEnabled, alarmsEnabled, status, deviceName)
 - Video streaming: UDP Datagram Puerto 9001 (JPEG fragmented)
-- Audio streaming: UDP Datagram Puerto 9000 (OPUS codec)
+- Audio streaming: UDP Datagram Puerto 5060 (OPUS codec, 16kHz, MediaCodec encoder/decoder)
 - **Heartbeat**: TCP keepalive cada 10 segundos (detecta desconexión rápido)
 
 **Internet Fallback**:
@@ -566,22 +570,27 @@ data class Event(
 - **Estado Automático**: Los switches de estado deben reflejar si Video está activo en la UI en tiempo real.
 
 ### 4. Sistema de Llamadas Telefónicas (Walkie-talkie Bidireccional)
-- **Clase Backend**: `CallManager.kt` (handles UDP audio streams on port 9000)
+- **Clase Backend**: `CallManager.kt` (handles UDP audio streams on port 5060)
   - Purpose: Manage audio stream lifecycle + audio permissions
-  - Methods: startAudioCall(), hangUp(), sendCommandToTerminal()
+  - Constructor: `CallManager(remoteIp: String, port: Int)` — non-null String required
+  - Codec: OPUS via MediaCodec (T47), SAMPLE_RATE=16000, PCM_16BIT mono
+  - Encoder: `MediaCodec.createEncoderByType(MIMETYPE_AUDIO_OPUS)` con 16kbps bitrate
+  - Decoder: `MediaCodec.createDecoderByType(MIMETYPE_AUDIO_OPUS)` para recepción
+  - Methods: startCall(), stopCall(), sendKeepAlive()
   - **SIN INTERFAZ VISUAL**: Llamadas de audio son walkie-talkie, sin Activity/Layout
-- **AudioCallActivity.kt**: Componente DEPRECATED - funcionalidad DEBE migrar a CallManager
+- **Inicio de Llamada (T45)**: Desde TerminalDetailActivity, botón "Llamar" toggle in-place:
+  - Click 1: `CallManager(ip, 5060).startCall()` → Botón cambia a "Colgar" (rojo, ic_call_end)
+  - Click 2: `callManager.stopCall()` → Botón vuelve a "Llamar" (teal, ic_call_up)
+  - NO lanza VideoActivity — walkie-talkie es in-place en TerminalDetailActivity
+- **call_history (T48)**: Al iniciar llamada, escribe doc en Firestore `/call_history` con caller_id, receiver_id, start_time, call_type="voice", status="in_progress". Al colgar, actualiza end_time + status="completed".
+- **CampanaService Audio (T46)**: `startAudioCall()`/`stopAudioCall()` en CampanaService manejan CallManager para llamadas iniciadas desde la notificación expandida. Lee `paired_monitor_ip` de EncryptedPreferences.
+- **AudioCallActivity.kt**: Componente DEPRECATED - funcionalidad migrada a CallManager
   - ⚠️ AÚN registrado en AndroidManifest (PENDIENTE: remover)
-  - No tiene setContentView (sin UI visual) - usa moveTaskToBack(true)
-  - MonitorMainActivity YA NO lo usa (rutas van a VideoActivity con mode="audiocall")
-- **Inicio de Llamada**: Puede iniciarse desde:
-  - Botón "Llamar" en `layout_monitor_content.xml` (Card de comunicación en Monitor Dashboard)
-  - Botón "Llamar" en notificación expandida de Monitor
-  - Ambos envían comando `/call/incoming` al Terminal vía NanoHTTPD (puerto 8080)
-- **Flujo Llamada**: Monitor → NanoHTTPD (puerto 8080 comando /call/incoming) → Terminal auto-acepta → Audio bidireccional walkie-talkie
-- **Flujo Comunicación Voz**: Captura mic → Encoding OPUS → UDP (puerto 9000) → Decodificación y playback en altavoz
+- **Flujo Llamada**: Monitor → btnCall toggle en TerminalDetailActivity → CallManager UDP → Audio bidireccional walkie-talkie
+- **Flujo Comunicación Voz**: Captura mic → Encoding OPUS (MediaCodec) → UDP (puerto 5060) → Decodificación OPUS y playback en altavoz
 - **Control**: Botón "Llamar"/"Colgar" en Monitor (mismo botón, cambia dinámicamente); Terminal auto-acepta
 - **UI Cambio de Estado**: Botón "Llamar" se convierte a "Colgar" cuando llamada está activa
+- **⚠️ BUG T58 (Abril 1, 2026)**: Monitor crea CallManager(terminalIp, 5060) PERO Terminal NUNCA crea su CallManager de vuelta → audio unidireccional (nulo en práctica). Falta HTTP POST `/request_call` para señalizar al Terminal. CampanaService.onCallRequested() lanza VideoActivity en vez de crear CallManager. Fix pendiente.
 
 ### 5. Monitoreo Silencioso de Terminal
 - **Clase**: `SilentMonitorManager.kt` (por crear)
@@ -589,6 +598,8 @@ data class Event(
 - **Micrófono Silencioso**: Captura audio continuo sin LED de grabación visible
 - **Videollamada Opcional**: Durante monitoreo silencioso, abrir VideoActivity para transmisión bidireccional
 - **Permisos**: Requiere permisos CAMERA y RECORD_AUDIO del Terminal (solicitados en onboarding)
+- **⚠️ BUG T59 (Abril 1, 2026)**: VideoActivity mode="monitor" nunca envía HTTP `/request_monitor` al Terminal → Terminal no inicia cámara. Además, CampanaService.onMonitorRequested() lanza VideoActivity sin `auto_accept=true` → streaming nunca inicia. Fix pendiente.
+- **⚠️ BUG T60 (Abril 1, 2026)**: `toggleBetweenSilentAndVideoCall()` llama `callViewModel.endCall()` al cambiar de videocall→silencioso. Observer de `CallState.Ended` ejecuta `finish()` → cierra la Activity completa. Fix: eliminar endCall del toggle.
 
 ### 6. Notificaciones Expandibles (Incluso sin Contenido)
 - **Clase**: `NotificationHelper.kt` (actualización)
@@ -753,10 +764,12 @@ BellActivity utiliza SOLO un layout y se lanza AUTOMÁTICAMENTE al bloquearse el
 - BellActivity declara `setShowWhenLocked(true)` + `setTurnScreenOn(true)` para mostrarse sobre lockscreen
 - BellActivity NO llama `requestDismissKeyguard()` — keyguard permanece activo detrás
 
-**Auto-Dismiss (Marzo 31)**:
+**Auto-Dismiss (Marzo 31, actualizado T56 Abril 1)**:
 - BellActivity registra receiver para `ACTION_USER_PRESENT` → `finish()` al desbloquear
 - AndroidManifest: `android:noHistory="true"` + `android:excludeFromRecents="true"`
 - Garantiza que BellActivity NUNCA persista al entrar a la app normalmente
+- **T56**: BellActivity.onCreate() y onResume() verifican `user_role` en SharedPreferences. Si es "monitor" → `finish()` inmediato. Previene que la campana aparezca tras cambiar de Terminal a Monitor.
+- **T56**: CampanaService.onDestroy() cancela `LOCKSCREEN_NOTIFICATION_ID` (ID=2) para que la notificación lockscreen no persista tras role-switch.
 
 **Immersive Mode (Marzo 31)**:
 - Barra de navegación oculta via `WindowInsetsController` (API 30+) o `SYSTEM_UI_FLAG_HIDE_NAVIGATION` (legacy)
@@ -797,13 +810,12 @@ override fun onCreate(savedInstanceState: Bundle?) {
 ```
 
 **Sonido de Campana (ACTUALIZADO v2.8 — Marzo 31, 2026)**:
-- **Recurso**: `res/raw/bell_chime.wav` — desk bell metálico tipo service bell (1.2s, fundamental 3200Hz, 7 parciales inharmónicos con decaimiento individual)
-- **Características acústicas**: Simula campana de escritorio (brass dome). Fundamental 3200Hz + sub-parcial 2400Hz (calidez) + parciales 4480/5120/6720/8960/11200Hz (brillo metálico). Pitch bend sutil en ataque (metal asentándose). Noise burst de 8ms para transiente de golpe.
+- **Recurso**: `res/raw/bell_chime.mp3` — clear bell chime (Universfield, royalty-free, 62KB MP3). Reemplazó al .wav sintético el 1 Abril 2026.
 - **Reproducción**: `MediaPlayer.create(this, R.raw.bell_chime)` con `AudioAttributes(USAGE_ALARM, CONTENT_TYPE_SONIFICATION)`
 - **USAGE_ALARM**: Garantiza que suene incluso en modo DND/silencio, penetra lockscreen
 - **Ciclo de vida**: `bellMediaPlayer` se libera en `onDestroy()` y antes de cada nueva reproducción (evita acumulación en toques rápidos)
 - **NO usa RingtoneManager** — sonido fijo embebido, NO configurable por el usuario
-- **Historial**: v1 RingtoneManager/TYPE_ALARM (alarma larga) → v2 880Hz+armónicos 0.6s (sonaba a tecla de piano) → v3 desk bell 3200Hz inharmónico 1.2s (actual)
+- **Historial**: v1 RingtoneManager/TYPE_ALARM (alarma larga) → v2 880Hz+armónicos 0.6s (sonaba a tecla de piano) → v3 desk bell 3200Hz inharmónico 1.2s (.wav sintético) → v4 clear bell chime MP3 (actual)
 
 **Layout Files** (UPDATED March 30, 2026 - ONLY LOCKSCREEN):
 - ✅ `layout_lockscreen.xml` - LOCKSCREEN OVERLAY (fondo TEAL, campana blanca + QR pairing centrado + flecha cerrar TOP-LEFT)
@@ -1967,6 +1979,7 @@ val closeButton = ImageButton(context).apply {
 - **Archivo**: `fragments/DashboardFragment.kt`
 - **Función**: Al listar terminales, hace polling HTTP a cada terminal para obtener batería y estado real. Actualiza `TerminalStatusAdapter` en tiempo real.
 - **Estado**: Implementado.
+- **⚠️ BUG T61 (Abril 1, 2026)**: `queryTerminalStatuses()` se ejecuta UNA sola vez (Thread que termina sin reschedule). No tiene Handler/Runnable como TerminalDetailActivity (que sí hace polling cada 5s). Resultado: batería se muestra pero no se actualiza. Fix: añadir Handler+Runnable con polling cada 10s, bound a onResume/onPause.
 
 ### BellActivity — Incoming Call/Monitor Handler
 - **Archivo**: `BellActivity.kt`
@@ -2014,8 +2027,22 @@ val closeButton = ImageButton(context).apply {
 
 - **SRS.md (v3.1)**: Define funcionalidades y requisitos de usuario (estado: ✅ Sincronizado Abril 1)
 - **PLAN_MIGRACION_SEGURIDAD.md (v2.2)**: Detalla medidas de seguridad (estado: ⚠️ Pendiente sync)
-- **TESTING_CHECKLISTS.md (v2.2)**: Casos de prueba críticos (estado: ⚠️ Pendiente sync)
-- **WorkItems.md**: Seguimiento de implementación (estado: ✅ Listo para Gemini)
+- **TESTING_CHECKLISTS.md (v2.4)**: Casos de prueba (estado: ✅ T44-T56 consolidados Abril 1)
+- **WorkItems.md (v15.0)**: 5 bugs pendientes T57-T61 (estado: ✅ Listo para Gemini)
 
 ---
-**Monitor de Cuidados - Documento Técnico v3.1**
+
+## ⚠️ BUGS CONOCIDOS — Testing Dispositivo Real (Abril 1, 2026)
+
+| ID | Bug | Causa Raíz | Archivos Afectados | Prioridad |
+|----|-----|-----------|--------------------|-----------|
+| T57 | Monitor NO recibe notificaciones (bell/voice/shake) | `paired_monitor_ip` posiblemente null en SharedPrefs tras pairing → HTTP nunca enviado | CampanaService.kt, QRScannerActivity.kt | 🔴 CRÍTICA |
+| T58 | Llamada walkie-talkie sin audio bidireccional | Terminal no crea CallManager de vuelta. onCallRequested lanza VideoActivity en vez de CallManager | TerminalDetailActivity.kt, CampanaService.kt | 🟡 ALTA |
+| T59 | Monitorear: pantalla negra sin video/audio | Monitor no envía HTTP /request_monitor. Terminal no inicia streaming (falta auto_accept) | VideoActivity.kt, CampanaService.kt | 🟡 ALTA |
+| T60 | Toggle videocall↔silencioso cierra Activity | endCall() emite CallState.Ended → observer ejecuta finish() | VideoActivity.kt | 🔴 CRÍTICA |
+| T61 | Batería del Terminal no se actualiza en Dashboard | queryTerminalStatuses() es one-shot (sin polling loop) | DashboardFragment.kt | 🟢 MEDIA |
+
+> Detalles completos en **WorkItems.md v15.0** (T57-T61).
+
+---
+**Monitor de Cuidados - Documento Técnico v3.4**
