@@ -1,7 +1,7 @@
 # 🛠️ DOCUMENTACIÓN TÉCNICA v3.0 - Monitor de Cuidados
 
 **Última actualización**: Abril 1, 2026  
-**Versión**: 3.1 (Auditoría: Sincronización código↔docs, schema Firestore completo, arquitectura single-APK, walkie-talkie corregido)  
+**Versión**: 3.2 (Auditoría: Sincronización código↔docs, schema Firestore completo, arquitectura single-APK, walkie-talkie corregido, CalibrationDialog+VoiceAlertAdapter documentados)  
 **Estado**: Arquitectura Completa - Sincronizado con SRS v3.1
 
 ---
@@ -1979,6 +1979,20 @@ val closeButton = ImageButton(context).apply {
 - **Función**: Fling vertical en `viewRemoteVideo`: swipe UP oculta barra de controles (`llControls → GONE`), swipe DOWN la muestra (`llControls → VISIBLE`). Threshold 100px. Solo vertical.
 - **Propósito**: UX — permite ver video fullscreen sin controles estorbando.
 - **Estado**: Implementado, ahora documentado.
+
+### CalibrationDialog — Calibración de Voz
+- **Archivo**: `dialogs/CalibrationDialog.kt` (126 líneas)
+- **Layout**: `dialog_calibration_step.xml`
+- **Función**: DialogFragment que guía al usuario Terminal a través de 3 palabras ("AUXILIO", "AYUDA", "SOCORRO") usando SpeechRecognizer para calibrar la detección de voz. Muestra la palabra actual, un botón de grabar, y una barra de progreso. Al reconocer correctamente la palabra (match por contains insensible), avanza al siguiente paso. Al completar las 3, se cierra automáticamente tras 2 segundos.
+- **Flujo**: setupStep() → startListening() → SpeechRecognizer → onResults() → match → nextStep → repeat
+- **Estado**: Implementado pero **HUÉRFANO** — ninguna Activity/Fragment lo instancia. Debe conectarse al flujo de Settings del Terminal (ej: botón "Calibrar Voz" en SettingsFragment cuando voice_detection_enabled=true).
+- **Dependencia**: Requiere permiso RECORD_AUDIO ya otorgado.
+
+### VoiceAlertAdapter — Adapter para Eventos de Detección de Voz
+- **Archivo**: `adapters/VoiceAlertAdapter.kt` (39 líneas)
+- **Layout**: `item_alert_voz.xml`
+- **Función**: RecyclerView adapter que muestra eventos de detección de voz en el Dashboard del Monitor. Usa modelo `Event` (Room local) + `ItemAlertVozBinding`.
+- **Estado**: **INCOMPLETO** — solo binds `tvAlertMessage` y `tvAlertTime`. El layout `item_alert_voz.xml` define 6 vistas: `ivAlertIcon`, `tvTerminalName`, `tvAlertMessage`, `tvAlertTime`, `btnCall`, `btnMonitor`. Las 4 vistas restantes no se bindean.
 
 ### CustomPhrasesManager
 - **Archivo**: `managers/CustomPhrasesManager.kt`
