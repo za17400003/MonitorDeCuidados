@@ -1,8 +1,8 @@
-# WORKITEMS v13.0 — TAREAS PENDIENTES (Abril 2, 2026)
+# WORKITEMS v13.1 — TAREAS PENDIENTES (Abril 2, 2026)
 
 > **ACTUALIZADO**: Abril 2, 2026
-> **ESTADO**: T14-T43 código ✅ build ✅. T44-T51 nuevas tareas de auditoría.
-> **ORDEN**: T44 → T51 → T50 → T49 → T45 → T46 → T47 → T48
+> **ESTADO**: T14-T43 código ✅ build ✅. T44-T55 nuevas tareas de auditoría.
+> **ORDEN**: T44 → T51 → T50 → T52 → T49 → T45 → T46 → T47 → T48 → T53 → T54 → T55
 
 ---
 
@@ -682,28 +682,440 @@ import com.example.monitordecuidados.adapters.NotificationAlertAdapter
 - [ ] Ambos usan NotificationAlertAdapter del paquete adapters
 - [ ] Solo 2 archivos en git diff (el nuevo adapter ya fue creado por Copilot)
 
-### CONSERVAR (no modificar):
-- `queryTerminalStatus()` — lógica HTTP GET intacta, ya maneja `isUpdatingFromServer`
-- `sendCommandToTerminal()` — lógica HTTP POST intacta
-- `setupDefaultSwitchStates()` — fallback intacto
-- `updateStatusText()` — sin cambios
-- Todos los `setOnCheckedChangeListener` con `if (!isUpdatingFromServer)` — intactos
-- Toolbar, botones, tvServiceStatusIndicator — sin cambios
+---
 
-### NO TOCAR estos archivos:
-- `CampanaHttpServer.kt`
-- `CampanaService.kt`
-- `TerminalQRFragment.kt` (recién arreglado en T42)
-- `activity_terminal_detail.xml`
+## T52: Fix remote_ip faltante en CampanaService server listeners (B10)
+
+**Problema**: CampanaService recibe `sourceIp` del Terminal en los callbacks de CampanaHttpServer, pero NO lo pasa a NotificationHelper ni a los Intents de VideoActivity. Resultado: al tocar notificación de alerta, Monitor no sabe a qué IP conectarse. VideoActivity se abre sin remote_ip.
+
+**Causa raíz**: Parámetro `sourceIp` se ignora en 4 de 5 callbacks del serverListener.
+
+### SNAPSHOT (CampanaService.kt — 474 líneas):
+- Archivo: `app/src/main/java/com/example/monitordecuidados/CampanaService.kt`
+- Líneas 79-80: onBellTriggered — sourceIp ignorado:
+```kotlin
+override fun onBellTriggered(sourceIp: String) {
+    NotificationHelper.notifyAlert(this@CampanaService, "🔔 Campana", "Se ha pedido ayuda desde Terminal", "bell")
+}
+```
+- Líneas 81-83: onVoiceTriggered — sourceIp ignorado:
+```kotlin
+override fun onVoiceTriggered(text: String, sourceIp: String) {
+    NotificationHelper.notifyAlert(this@CampanaService, "🎙️ Voz", text, "voice")
+}
+```
+- Líneas 86-91: onCallRequested — FALTA putExtra("remote_ip"):
+```kotlin
+override fun onCallRequested(sourceIp: String) {
+    val intent = Intent(this@CampanaService, VideoActivity::class.java).apply {
+        putExtra("mode", "videocall")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    startActivity(intent)
+}
+```
+- Líneas 92-97: onMonitorRequested — FALTA putExtra("remote_ip"):
+```kotlin
+override fun onMonitorRequested(sourceIp: String) {
+    val intent = Intent(this@CampanaService, VideoActivity::class.java).apply {
+        putExtra("mode", "monitor")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    startActivity(intent)
+}
+```
+
+### REFERENCIA CORRECTA (BellActivity.kt — así debe verse):
+```kotlin
+private fun showIncomingCall(remoteIp: String) {
+    val intent = Intent(this, VideoActivity::class.java).apply {
+        putExtra("mode", "videocall")
+        putExtra("remote_ip", remoteIp)  // ✅ Correcto
+        putExtra("auto_accept", true)
+    }
+    startActivity(intent)
+}
+```
+
+### CAMBIO en CampanaService.kt:
+1. onCallRequested — añadir `putExtra("remote_ip", sourceIp)`:
+```kotlin
+override fun onCallRequested(sourceIp: String) {
+    val intent = Intent(this@CampanaService, VideoActivity::class.java).apply {
+        putExtra("mode", "videocall")
+        putExtra("remote_ip", sourceIp)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    startActivity(intent)
+}
+```
+
+2. onMonitorRequested — añadir `putExtra("remote_ip", sourceIp)`:
+```kotlin
+override fun onMonitorRequested(sourceIp: String) {
+    val intent = Intent(this@CampanaService, VideoActivity::class.java).apply {
+        putExtra("mode", "monitor")
+        putExtra("remote_ip", sourceIp)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    startActivity(intent)
+}
+```
+
+3. onBellTriggered — guardar sourceIp para uso futuro en notificaciones:
+```kotlin
+override fun onBellTriggered(sourceIp: String) {
+    NotificationHelper.notifyAlert(this@CampanaService, "🔔 Campana", "Se ha pedido ayuda desde Terminal", "bell", sourceIp)
+}
+```
+
+4. onVoiceTriggered — guardar sourceIp:
+```kotlin
+override fun onVoiceTriggered(text: String, sourceIp: String) {
+    NotificationHelper.notifyAlert(this@CampanaService, "🎙️ Voz", text, "voice", sourceIp)
+}
+```
+
+5. onShakeTriggered — guardar sourceIp (línea ~122):
+```kotlin
+override fun onShakeTriggered(sourceIp: String) {
+    NotificationHelper.notifyAlert(this@CampanaService, "⚠️ Caída detectada", "Movimiento brusco en Terminal", "shake", sourceIp)
+}
+```
+
+**NOTA**: NotificationHelper.notifyAlert YA acepta `terminalName` como 5to parámetro (default ""). Aquí pasamos `sourceIp` como ese 5to parámetro para que quede disponible.
 
 ### ARCHIVOS A MODIFICAR:
-1. `app/src/main/java/com/example/monitordecuidados/TerminalDetailActivity.kt`
+- `CampanaService.kt` (5 callbacks del serverListener)
+
+### CONSERVAR (dentro del archivo):
+- onCommandReceived, onPairingConfirmed, onStatusRequested — NO TOCAR
+- startAudioCall, stopAudioCall — NO TOCAR (se modifican en T46)
+- refreshServices, updateNotification — NO TOCAR
+- Todo lo demás del servicio — NO TOCAR
+
+### NO TOCAR:
+- NotificationHelper.kt (su firma ya acepta el 5to parámetro)
+- CampanaHttpServer.kt
+- BellActivity.kt
+- VideoActivity.kt
 
 ### VERIFICACIÓN:
-1. Abrir Monitor → TerminalDetailActivity con Terminal vinculado
-2. En Terminal, toggle switch Campanilla OFF → switch en Monitor debe cambiar a OFF en ~5 segundos
-3. Toggle de vuelta ON → Monitor refleja ON en ~5 segundos
-4. Repetir con los 4 switches
-5. Al salir de TerminalDetailActivity (back), el polling se detiene (no consume recursos en background)
-6. Al volver a entrar, el polling se reinicia automáticamente
-7. Los switches del Monitor siguen enviando comandos HTTP al tocarlos manualmente (no regresión T39-FIX)
+- [ ] Build pasa
+- [ ] Solo CampanaService.kt en git diff
+- [ ] onCallRequested incluye putExtra("remote_ip", sourceIp)
+- [ ] onMonitorRequested incluye putExtra("remote_ip", sourceIp)
+- [ ] Los 3 notifyAlert calls incluyen sourceIp como 5to arg
+
+---
+
+## T53: Battery Low — Alerta cuando batería del Terminal ≤15% (B6)
+
+**Problema**: El Terminal reporta batteryLevel en /status (CampanaService), y el Monitor lo muestra con ⚠️ en Dashboard (TerminalStatusAdapter), pero NO se genera una alerta/notificación proactiva cuando la batería baja de 15%. El Monitor solo ve el ícono si abre Dashboard — no se entera si está en otra pantalla.
+
+**Causa raíz**: No hay BroadcastReceiver ni lógica de umbral que dispare notificación.
+
+### Requisito per SDD:
+- Firestore notification type: `"battery_low"` (ya definido en schema)
+- Hysteresis: Alertar al bajar de 15%. Alertar "Battery OK" al subir de 20%. No re-alertar entre 15-20%.
+
+### SNAPSHOT (CampanaService.kt):
+- Líneas 128-132: Ya lee batteryLevel via BatteryManager:
+```kotlin
+val bm = getSystemService(BATTERY_SERVICE) as android.os.BatteryManager
+val batteryLevel = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+put("batteryLevel", batteryLevel)
+```
+- Este código está DENTRO de `onStatusRequested()` → solo se ejecuta cuando el Monitor hace polling.
+
+### CAMBIO en CampanaService.kt:
+1. Añadir variable de estado de batería (junto a las otras variables de clase):
+```kotlin
+private var lastBatteryAlertState: String = "ok" // "ok" | "low"
+```
+
+2. Añadir método `checkBatteryLevel()` que verifica y alerta:
+```kotlin
+private fun checkBatteryLevel() {
+    val bm = getSystemService(BATTERY_SERVICE) as android.os.BatteryManager
+    val level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+    
+    if (level <= 15 && lastBatteryAlertState == "ok") {
+        lastBatteryAlertState = "low"
+        // Enviar HTTP POST al Monitor para que muestre notificación
+        val monitorIp = getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE)
+            .getString("paired_monitor_ip", "") ?: ""
+        if (monitorIp.isNotEmpty()) {
+            serviceScope.launch {
+                try {
+                    val url = java.net.URL("http://$monitorIp:8080/trigger_bell")
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.doOutput = true
+                    conn.outputStream.write("{\"message\":\"🔋 Batería baja ($level%)\",\"type\":\"battery_low\"}".toByteArray())
+                    conn.responseCode
+                    conn.disconnect()
+                } catch (e: Exception) {
+                    FileLogger.logWarning(TAG, "Error sending battery_low alert: ${e.message}")
+                }
+            }
+        }
+    } else if (level > 20 && lastBatteryAlertState == "low") {
+        lastBatteryAlertState = "ok"
+    }
+}
+```
+
+3. Llamar `checkBatteryLevel()` desde el ciclo principal del servicio. Buscar donde ya hay un Handler o ciclo periódico y añadir la llamada ahí. Si no hay ciclo, crear un Handler que ejecute cada 60 segundos:
+```kotlin
+private val batteryCheckHandler = Handler(Looper.getMainLooper())
+private val batteryCheckRunnable = object : Runnable {
+    override fun run() {
+        checkBatteryLevel()
+        batteryCheckHandler.postDelayed(this, 60000)
+    }
+}
+```
+Iniciar en `onCreate`/`onStartCommand`:
+```kotlin
+batteryCheckHandler.post(batteryCheckRunnable)
+```
+Detener en `onDestroy`:
+```kotlin
+batteryCheckHandler.removeCallbacks(batteryCheckRunnable)
+```
+
+### ARCHIVOS A MODIFICAR:
+- `CampanaService.kt` (nueva variable, nuevo método, nuevo Handler)
+
+### CONSERVAR (dentro del archivo):
+- onStatusRequested() batteryLevel reading — NO TOCAR (ese es para polling del Monitor)
+- Todo lo demás del servicio — NO TOCAR
+
+### NO TOCAR:
+- TerminalStatusAdapter.kt (ya muestra ⚠️ en Dashboard)
+- NotificationHelper.kt
+
+### VERIFICACIÓN:
+- [ ] Build pasa
+- [ ] Solo CampanaService.kt en git diff
+- [ ] Con batería ≤15%, Monitor recibe notificación "Batería baja"
+- [ ] No se re-alerta mientras batería entre 15-20%
+- [ ] Al subir >20%, estado se resetea a "ok" (próxima bajada disparará nueva alerta)
+
+---
+
+## T54: Reconexión con exponential backoff para comunicación HTTP local (B8)
+
+**Problema**: Si el Terminal desaparece de la red local (WiFi off, reinicio, etc.), el Monitor no re-intenta conectar. Los comandos HTTP simplemente fallan silenciosamente. Per SRS (Fase 4A): el Monitor debe reintentar con backoff exponencial 5s → 10s → 30s → 60s.
+
+**Causa raíz**: No hay mecanismo de reconexión. SyncManager tiene backoff para Firestore, pero los comandos HTTP locales no lo usan.
+
+### Requisito per SRS:
+- Si Terminal no responde por 30 segundos en local: iniciar reconexión
+- Ciclo: 5s → 10s → 30s → 60s (exponential backoff)
+- Si reconexión exitosa: reanudar comandos normales
+- Si falla >5 minutos: mostrar alerta "Conexión perdida"
+
+### SNAPSHOT (TerminalDetailActivity.kt — 159 líneas):
+- pollHandler hace queryTerminalStatus() cada 5s (T43)
+- queryTerminalStatus() hace GET /status — si falla, NO hay retry ni feedback visual
+
+### CAMBIO en TerminalDetailActivity.kt:
+1. Añadir variables de reconexión:
+```kotlin
+private var consecutiveFailures = 0
+private var isConnectionLost = false
+```
+
+2. En queryTerminalStatus(), dentro del catch (cuando GET /status falla), implementar lógica de backoff:
+```kotlin
+// En el catch de queryTerminalStatus():
+consecutiveFailures++
+val backoffMs = when {
+    consecutiveFailures <= 1 -> 5000L
+    consecutiveFailures <= 2 -> 10000L
+    consecutiveFailures <= 3 -> 30000L
+    else -> 60000L
+}
+pollHandler.removeCallbacks(pollRunnable)
+pollHandler.postDelayed(pollRunnable, backoffMs)
+
+if (consecutiveFailures * 5000 > 300000) { // >5 min de fallos
+    runOnUiThread {
+        binding.tvServiceStatusIndicator.text = "⚠️ Conexión perdida"
+        binding.tvServiceStatusIndicator.setTextColor(resources.getColor(android.R.color.holo_red_dark, theme))
+    }
+    isConnectionLost = true
+}
+```
+
+3. En queryTerminalStatus(), al recibir respuesta exitosa, resetear contadores:
+```kotlin
+// En el success path de queryTerminalStatus():
+consecutiveFailures = 0
+if (isConnectionLost) {
+    isConnectionLost = false
+    runOnUiThread {
+        binding.tvServiceStatusIndicator.text = "✅ Conectado"
+        binding.tvServiceStatusIndicator.setTextColor(resources.getColor(R.color.teal_700, theme))
+    }
+    // Restaurar polling normal
+    pollHandler.removeCallbacks(pollRunnable)
+    pollHandler.postDelayed(pollRunnable, 5000)
+}
+```
+
+### ARCHIVOS A MODIFICAR:
+- `TerminalDetailActivity.kt` (dentro de queryTerminalStatus, nuevas variables)
+
+### CONSERVAR (dentro del archivo):
+- switches, btnCall, btnMonitor — NO TOCAR
+- sendCommandToTerminal() — NO TOCAR
+- pollHandler/pollRunnable estructura base (T43) — mantener, SOLO ajustar delay dinámico dentro de queryTerminalStatus
+
+### NO TOCAR:
+- CampanaService.kt
+- CampanaHttpServer.kt
+- SyncManager.kt (su backoff es para Firestore, NO para HTTP local)
+
+### VERIFICACIÓN:
+- [ ] Build pasa
+- [ ] Solo TerminalDetailActivity.kt en git diff
+- [ ] Terminal OFF → polling se espacía (5s, 10s, 30s, 60s)
+- [ ] Terminal ON de nuevo → polling vuelve a 5s, indicador verde
+- [ ] Después de 5 minutos sin conexión → texto "⚠️ Conexión perdida" visible
+
+---
+
+## T55: Internet fallback + Auto-switch WiFi↔Internet (B7 + B9)
+
+**Problema**: La app solo intenta comunicación por WiFi local (mDNS + HTTP directo). Si los dispositivos NO están en la misma WiFi, no hay fallback a internet (Firestore/FCM). Per SRS REGLA #1-#4: debe haber detección de red, fallback automático, y auto-switch al detectar cambio de red.
+
+**Causa raíz**: NetworkUtils solo tiene `isWifiConnected()` y `getLocalIpAddress()`. No hay NetworkCallback, no hay lógica de fallback.
+
+### Requisito per SRS:
+- **REGLA #1**: WiFi local SIEMPRE primero
+- **REGLA #2**: Si local falla (30s timeout) → usar Internet (Firestore + FCM)
+- **REGLA #3**: Detección cada 30s si ambos en misma red (mDNS)
+- **REGLA #4**: Persistir `connectionType` ("local"|"internet"). Auto-switch cuando cambia la red.
+
+### SNAPSHOT (NetworkUtils.kt — 36 líneas):
+- Archivo: `app/src/main/java/com/example/monitordecuidados/utils/NetworkUtils.kt`
+- Solo tiene: `getLocalIpAddress()` y `isWifiConnected()`. NO tiene: `NetworkCallback`, `connectionType` tracking, fallback logic.
+
+### CAMBIO en NetworkUtils.kt:
+Añadir funciones de conectividad avanzada:
+
+```kotlin
+private var currentConnectionType: String = "local" // "local" | "internet"
+private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+fun getConnectionType(): String = currentConnectionType
+
+fun setConnectionType(type: String, context: Context) {
+    currentConnectionType = type
+    val prefs = context.getSharedPreferences("monitordecuidados_prefs", Context.MODE_PRIVATE)
+    prefs.edit().putString("connection_type", type).apply()
+}
+
+fun initConnectionType(context: Context) {
+    val prefs = context.getSharedPreferences("monitordecuidados_prefs", Context.MODE_PRIVATE)
+    currentConnectionType = prefs.getString("connection_type", "local") ?: "local"
+}
+
+fun registerNetworkCallback(context: Context, onChanged: (Boolean) -> Unit) {
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: android.net.Network) {
+            onChanged(true)
+        }
+        override fun onLost(network: android.net.Network) {
+            onChanged(false)
+        }
+    }
+    val request = android.net.NetworkRequest.Builder()
+        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        .build()
+    cm.registerNetworkCallback(request, networkCallback!!)
+}
+
+fun unregisterNetworkCallback(context: Context) {
+    networkCallback?.let {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        cm.unregisterNetworkCallback(it)
+        networkCallback = null
+    }
+}
+
+fun isInternetAvailable(context: Context): Boolean {
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = cm.activeNetwork ?: return false
+    val capabilities = cm.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+}
+```
+
+### CAMBIO en CampanaService.kt:
+En `onStartCommand` o `onCreate`, inicializar NetworkUtils:
+```kotlin
+NetworkUtils.initConnectionType(this)
+NetworkUtils.registerNetworkCallback(this) { hasInternet ->
+    if (!hasInternet) {
+        FileLogger.logWarning(TAG, "Network lost")
+    } else {
+        FileLogger.logInfo(TAG, "Network available")
+    }
+}
+```
+
+En `onDestroy`, limpiar:
+```kotlin
+NetworkUtils.unregisterNetworkCallback(this)
+```
+
+### CAMBIO en TerminalDetailActivity.kt:
+En `queryTerminalStatus()`, si GET local falla y `consecutiveFailures > 6` (30s de fallos), intentar fallback:
+```kotlin
+if (consecutiveFailures > 6 && NetworkUtils.getConnectionType() == "local") {
+    if (NetworkUtils.isInternetAvailable(this)) {
+        NetworkUtils.setConnectionType("internet", this)
+        // Lógica futura: usar Firestore para comandos en lugar de HTTP directo
+        FileLogger.logInfo("TerminalDetail", "Switched to internet fallback")
+    }
+}
+```
+
+En el success path de `queryTerminalStatus()`, si estábamos en internet y ahora local funciona, volver:
+```kotlin
+if (NetworkUtils.getConnectionType() == "internet") {
+    NetworkUtils.setConnectionType("local", this)
+    FileLogger.logInfo("TerminalDetail", "Switched back to local")
+}
+```
+
+### ARCHIVOS A MODIFICAR:
+- `NetworkUtils.kt` (nuevas funciones)
+- `CampanaService.kt` (init + cleanup del NetworkCallback)
+- `TerminalDetailActivity.kt` (fallback logic en queryTerminalStatus)
+
+### CONSERVAR (dentro de cada archivo):
+- NetworkUtils: `getLocalIpAddress()` y `isWifiConnected()` — NO TOCAR
+- CampanaService: TODO menos las líneas de init/cleanup — NO TOCAR
+- TerminalDetailActivity: switches, btnCall, btnMonitor — NO TOCAR
+
+### NO TOCAR:
+- SyncManager.kt (ya tiene su propio backoff para Firestore)
+- FirebaseService.kt
+- CampanaHttpServer.kt
+
+### DEPENDENCIA: Requiere T54 completada primero (usa consecutiveFailures).
+
+### VERIFICACIÓN:
+- [ ] Build pasa
+- [ ] 3 archivos en git diff: NetworkUtils.kt, CampanaService.kt, TerminalDetailActivity.kt
+- [ ] NetworkUtils.getConnectionType() retorna "local" por defecto
+- [ ] NetworkCallback registrado en CampanaService
+- [ ] Tras 30s de fallos locales → connectionType cambia a "internet"
+- [ ] Cuando local vuelve a funcionar → connectionType vuelve a "local"
