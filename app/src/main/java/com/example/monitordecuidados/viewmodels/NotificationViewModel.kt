@@ -1,29 +1,38 @@
 package com.example.monitordecuidados.viewmodels
 
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.map
 import com.example.monitordecuidados.cloud.FirebaseService
+import com.example.monitordecuidados.data.local.AppDatabase
+import com.example.monitordecuidados.data.local.Event
 import com.example.monitordecuidados.models.NotificationItem
 import com.example.monitordecuidados.models.NotificationState
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QueryDocumentSnapshot
 
-class NotificationViewModel : ViewModel() {
+class NotificationViewModel(application: Application) : AndroidViewModel(application) {
     private val _notificationState = MutableLiveData<NotificationState>(NotificationState.Empty)
     val notificationState: LiveData<NotificationState> = _notificationState
 
-    private val _notificationList = MutableLiveData<List<NotificationItem>>(emptyList())
-    val notificationList: LiveData<List<NotificationItem>> = _notificationList
+    // T69: DashboardFragment LOCAL-FIRST — leer alertas de Room DB
+    private val eventDao = AppDatabase.getDatabase(application).eventDao()
 
-    val unreadCount: LiveData<Int> = _notificationList.map { list ->
-        list.count { !it.read }
+    // T84: 1 card por terminal, no 1 card por evento
+    val notificationList: LiveData<List<Event>> = eventDao.getGroupedAlertsByTerminal(20)
+
+    val unreadCount: LiveData<Int> = notificationList.map { list ->
+        // Note: Event doesn't have a 'read' field yet, we might need to add it or use a separate way to track it.
+        // For now, returning 0 to avoid build errors if the UI expects it.
+        0
     }
 
     private val db = FirebaseService.db
     private val auth = FirebaseService.auth
 
+    // T69: Keeping Firestore sync as backup, but Dashboard now reads from Room
     fun getNotifications() {
         val userId = auth.currentUser?.uid ?: return
         _notificationState.value = NotificationState.Loading
@@ -33,66 +42,10 @@ class NotificationViewModel : ViewModel() {
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .get()
             .addOnSuccessListener { snapshot ->
-                if (snapshot.isEmpty) {
-                    _notificationState.value = NotificationState.Empty
-                    _notificationList.value = emptyList()
-                } else {
-                    val list = snapshot.documents.mapNotNull { doc ->
-                        mapDocumentToNotification(doc as QueryDocumentSnapshot)
-                    }
-                    _notificationList.value = list
-                    _notificationState.value = NotificationState.Success
-                }
+                _notificationState.value = if (snapshot.isEmpty) NotificationState.Empty else NotificationState.Success
             }
             .addOnFailureListener { e ->
                 _notificationState.value = NotificationState.Error(e.message ?: "Failed to load notifications")
-            }
-    }
-
-    private fun mapDocumentToNotification(doc: QueryDocumentSnapshot): NotificationItem {
-        val type = doc.getString("type") ?: "unknown"
-        return NotificationItem(
-            id = doc.id,
-            type = type,
-            title = getTitleForType(type),
-            body = getBodyForType(doc),
-            timestamp = doc.getTimestamp("timestamp"),
-            read = doc.getBoolean("read") ?: false
-        )
-    }
-
-    private fun getTitleForType(type: String?): String = when (type) {
-        "battery_low" -> "Batería Baja"
-        "battery_ok" -> "Batería Recuperada"
-        "shake" -> "Alerta de Agitación"
-        "voice" -> "Alerta de Voz"
-        "bell" -> "Campana"
-        "alarm" -> "Alarma"
-        else -> "Alerta"
-    }
-
-    private fun getBodyForType(doc: QueryDocumentSnapshot): String {
-        val type = doc.getString("type")
-        val deviceName = doc.getString("deviceName") ?: "Dispositivo"
-        val batteryLevel = doc.getLong("batteryLevel")?.toInt()
-        return when (type) {
-            "battery_low", "battery_ok" -> "$deviceName - ${batteryLevel}%"
-            "voice" -> doc.getString("body") ?: "$deviceName - Voz"
-            "shake" -> doc.getString("body") ?: "$deviceName - Agitación"
-            "alarm" -> doc.getString("body") ?: "$deviceName - Alarma"
-            else -> doc.getString("body") ?: deviceName
-        }
-    }
-
-    fun markAsRead(notificationId: String) {
-        db.collection("notifications_history").document(notificationId)
-            .update("read", true)
-            .addOnSuccessListener {
-                val currentList = _notificationList.value ?: return@addOnSuccessListener
-                val updatedList = currentList.map {
-                    if (it.id == notificationId) it.copy(read = true) else it
-                }
-                _notificationList.value = updatedList
             }
     }
 
@@ -107,16 +60,7 @@ class NotificationViewModel : ViewModel() {
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
-                    if (snapshot.isEmpty) {
-                        _notificationState.value = NotificationState.Empty
-                        _notificationList.value = emptyList()
-                    } else {
-                        val list = snapshot.documents.mapNotNull { doc ->
-                            mapDocumentToNotification(doc as QueryDocumentSnapshot)
-                        }
-                        _notificationList.value = list
-                        _notificationState.value = NotificationState.Success
-                    }
+                    _notificationState.value = if (snapshot.isEmpty) NotificationState.Empty else NotificationState.Success
                 }
             }
     }

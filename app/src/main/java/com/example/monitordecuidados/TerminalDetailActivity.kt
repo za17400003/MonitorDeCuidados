@@ -62,11 +62,23 @@ class TerminalDetailActivity : AppCompatActivity() {
         binding.tvTerminalName.text = terminalName
         updateStatusText(terminalStatus)
 
+        // T80: Auto-call cuando viene desde menú radial de burbuja
+        val autoCall = intent.getBooleanExtra("auto_call", false)
+
         // T45: Walkie-talkie in-place
         binding.btnCall.setOnClickListener {
             val ip = remoteIp ?: return@setOnClickListener
             
             if (!isCallActive) {
+                // T64: Verificar RECORD_AUDIO antes de iniciar llamada
+                if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    androidx.core.app.ActivityCompat.requestPermissions(
+                        this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 3001
+                    )
+                    return@setOnClickListener
+                }
+
                 // T58: Señalar al Terminal que inicie su CallManager
                 Thread {
                     try {
@@ -84,7 +96,8 @@ class TerminalDetailActivity : AppCompatActivity() {
                 }.start()
 
                 // Iniciar llamada walkie-talkie in-place lado Monitor
-                callManager = CallManager(ip, 5060)
+                // T87: Puerto 9050
+                callManager = CallManager(ip, 9050)
                 callManager?.startCall()
                 isCallActive = true
                 binding.tvCallLabel.text = "Colgar"
@@ -167,6 +180,21 @@ class TerminalDetailActivity : AppCompatActivity() {
         }
         binding.switchAlarms.setOnCheckedChangeListener { _, isChecked ->
             if (!isUpdatingFromServer) sendCommandToTerminal(if (isChecked) "SET_ALARMS_ON" else "SET_ALARMS_OFF")
+        }
+
+        // T80: Si auto_call=true, simular tap en Llamar
+        if (autoCall) {
+            binding.btnCall.post { binding.btnCall.performClick() }
+        }
+    }
+
+    // T64: Manejar resultado de permiso RECORD_AUDIO
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 3001 && grantResults.isNotEmpty()
+            && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            // Permiso concedido — simular tap en btnCall para reiniciar flujo
+            binding.btnCall.performClick()
         }
     }
 

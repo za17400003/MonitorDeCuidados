@@ -17,8 +17,8 @@ class ConnectionViewModel : ViewModel() {
     private val _pairingsList = MutableLiveData<List<PairingInfo>>(emptyList())
     val pairingsList: LiveData<List<PairingInfo>> = _pairingsList
 
-    private val db = FirebaseService.db
-    private val auth = FirebaseService.auth
+    private val db by lazy { FirebaseService.db }
+    private val auth by lazy { FirebaseService.auth }
     private var pairingsListenerRegistration: ListenerRegistration? = null
 
     fun getPairingsList() {

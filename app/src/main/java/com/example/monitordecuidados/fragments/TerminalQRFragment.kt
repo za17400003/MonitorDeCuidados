@@ -17,6 +17,7 @@ import androidx.fragment.app.Fragment
 import com.example.monitordecuidados.CampanaService
 import com.example.monitordecuidados.databinding.FragmentTerminalQrBinding
 import com.example.monitordecuidados.utils.NetworkUtils
+import com.example.monitordecuidados.utils.KeyStoreHelper
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import org.json.JSONObject
@@ -59,6 +60,13 @@ class TerminalQRFragment : Fragment() {
             prefs.edit().putString("terminal_device_id", deviceId).apply()
         }
 
+        // T71: Generar un secreto aleatorio para este terminal si no existe
+        var pairingSecret = prefs.getString("pairing_secret", null)
+        if (pairingSecret == null) {
+            pairingSecret = KeyStoreHelper.generateRandomToken(32)
+            prefs.edit().putString("pairing_secret", pairingSecret).apply()
+        }
+
         val personName = prefs.getString("terminal_person_name", null)
             ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.displayName
         val displayName = if (!personName.isNullOrEmpty()) personName else "Terminal de ${android.os.Build.MODEL}"
@@ -68,7 +76,7 @@ class TerminalQRFragment : Fragment() {
             put("ip", ip)
             put("port", 8080)
             put("name", displayName)
-            put("secret", "CampanaSecureKey")
+            put("secret", pairingSecret) // T71: Usar secreto aleatorio en lugar de hardcodeado
         }
         generateQR(qrJson.toString())
 

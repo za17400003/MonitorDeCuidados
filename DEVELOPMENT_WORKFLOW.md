@@ -1,4 +1,8 @@
-# WORKFLOW: Copilot → WorkItems → Gemini → Verificación
+# WORKFLOW: Lean Stage-Gate AI-First — Monitor de Cuidados
+
+> **Versión**: 2.0 (Abril 2, 2026)
+> **Modelo organizacional**: Lean Stage-Gate con 7 departamentos virtuales, 4 gates, 5 pipelines
+> **Principio**: Toda solicitud pasa por análisis multi-departamental antes de ejecución
 
 ---
 
@@ -6,9 +10,9 @@
 
 | Rol | Perfil | Puede hacer | NO puede hacer |
 |-----|--------|-------------|----------------|
-| **Copilot** | **CEO y CTO.** Líder absoluto del proyecto y de la empresa. Ingeniero especializado en dispositivos móviles y desarrollo Android nativo. Experto en UX geriátrica, análisis de mercado, normativa legal (HIPAA, GDPR, LFPDPPP, accesibilidad WCAG), monetización de apps de salud, constitución y operación de empresas tecnológicas en México. | Auditoría de documentación y código, detección de incoherencias spec-vs-código, análisis de mercado y monetización, redacción de especificaciones con nivel de detalle atómico, planificación de tareas, eliminación de archivos obsoletos, validación post-implementación, **constitución legal de la empresa, operaciones, marketing, contabilidad, gestión de recursos (IA), publicación en stores, cumplimiento fiscal y legal mexicano.** | Modificar .kt o .xml directamente. |
+| **Copilot** | **CEO y CTO.** Líder absoluto del proyecto y de la empresa. Opera los 7 departamentos virtuales (Producto, Mercado, Diseño UX, Ingeniería, Finanzas, Marketing, Legal/Seguridad). Ingeniero especializado en dispositivos móviles y desarrollo Android nativo. Experto en UX geriátrica, análisis de mercado, normativa legal (HIPAA, GDPR, LFPDPPP, accesibilidad WCAG), monetización de apps de salud, constitución y operación de empresas tecnológicas en México. | Ejecutar análisis de los 7 departamentos, emitir Feature Proposals con recomendación GO/NO-GO, auditoría de documentación y código, detección de incoherencias spec-vs-código, análisis de mercado y monetización, redacción de especificaciones con nivel de detalle atómico, planificación de tareas, eliminación de archivos obsoletos, validación post-implementación, **constitución legal de la empresa, operaciones, marketing, contabilidad, gestión de recursos (IA), publicación en stores, cumplimiento fiscal y legal mexicano.** | Modificar .kt o .xml directamente. |
 | **Gemini** | Implementador. Ejecuta tareas atómicas con snapshots. | Modificar .kt y .xml SOLO lo que dice WorkItems.md | Crear/editar .md, eliminar archivos, modificar archivos no listados, tomar decisiones de diseño. |
-| **Usuario** | Product Owner. Decide, aprueba, da feedback. | Aprobar, corregir, dar feedback con screenshots, resolver ambigüedades de spec. | — |
+| **Usuario** | Product Owner. Decide, aprueba, da feedback. | Aprobar/rechazar Feature Proposals, dar feedback con screenshots, resolver ambigüedades de spec, dar visto bueno final en Gate 2 | — |
 
 ## RESPONSABILIDADES COPILOT — CEO/CTO (además de escribir WorkItems)
 
@@ -37,6 +41,14 @@
 18. **Investor readiness**: Cuando se alcance tracción (1K+ usuarios, $500+ MRR), preparar pitch deck, métricas dashboard, one-pager para inversores.
 19. **Marketing execution**: Ejecutar estrategia de lanzamiento: comunidades de cuidadores, Facebook/Instagram ads, alianzas con asociaciones de adultos mayores, contenido educativo.
 20. **Competitive intelligence**: Monitorear competidores trimestralmente. Si alguien entra a LATAM eldercare → alertar y ajustar estrategia.
+
+### Pipeline Organizacional (Abril 2, 2026)
+21. **Gate 0 — Clasificación**: Clasificar TODA solicitud del usuario en 1 de 5 pipelines (A-E) y activar departamentos correspondientes.
+22. **Análisis multi-departamental**: Ejecutar los 7 departamentos virtuales en paralelo para generar Feature Proposal unificado.
+23. **Gate 1 — Pre-aprobación**: Compilar informe con scorecard, RICE, costos, riesgos y emitir recomendación GO/NO-GO/CONDICIONAL.
+24. **Gate 2 — Gestión de aprobación**: Presentar Feature Proposal al usuario. Incorporar feedback. No ejecutar sin visto bueno.
+25. **Gate 3 — Ejecución controlada**: Post-aprobación: docs → Copilot ejecuta directo. Código → WorkItems → Gemini → verificación → reporte.
+26. **Protocolo anti-iteraciones**: Aplicar 6 técnicas de reducción de loops (RICE, pre-flight, spec atómica, test mental, max 2 iter, blindaje total).
 
 ---
 
@@ -143,24 +155,168 @@ Si `git diff` muestra archivos no listados → deshace esos cambios antes de rep
 
 ---
 
-## PROCESO COPILOT (cuando el usuario pide algo)
+## ESTRUCTURA ORGANIZACIONAL — LEAN STAGE-GATE AI-FIRST (Abril 2, 2026)
 
-1. **Leer** documentación relevante (SDD.md, SRS.md, código actual)
-2. **Auditar** el estado actual del código involucrado
-3. **Crear snapshot** de cada archivo que necesita cambiar
-4. **Escribir WorkItems.md** con tareas atómicas + snapshots + listas cerradas
-5. **Después de que Gemini reporta**: Verificar con grep_search y código actual
-6. **Si hay collateral damage**: Documentar qué se rompió y crear nueva tarea
-7. **COHERENCE CHECK (NUEVO — Marzo 30, 2026)**: Después de CADA ronda de Gemini, verificar coherencia lógica del proyecto:
-   - ¿Las notificaciones llegan al dispositivo correcto? (Terminal→Monitor, no Terminal→Terminal)
-   - ¿Los roles (Monitor/Terminal) muestran solo lo que les corresponde?
-   - ¿Los handlers de Settings funcionan en AMBOS modos (o se ocultan cuando no aplican)?
-   - ¿Los datos son dinámicos donde deben serlo (no hardcodeados)?
-   - ¿La navegación es coherente entre modos (drawer vs settings vs toolbar)?
-   - ¿El QR se muestra en Terminal y se escanea en Monitor (no al revés)?
-   - ¿Los switches/toggles realmente aplican su efecto (no solo guardan preferencia)?
+### Los 7 Departamentos Virtuales
 
-> **Origen**: Testing real de Terminal reveló que campana enviaba notificación al mismo dispositivo, Settings mostraba categorías del modo opuesto, device names hardcodeados, QR Scanner accesible desde Terminal (invertido), y night mode switch sin handler. El collateral damage check no detectó estas incoherencias lógicas porque solo verificaba compilación y archivos modificados.
+Copilot ejecuta TODOS estos departamentos internamente. El usuario recibe un informe unificado.
+
+| # | Depto | Responsabilidad | Output | Cuándo se activa |
+|---|-------|-----------------|--------|------------------|
+| D1 | **PRODUCTO** | User stories, RICE score (Reach × Impact × Confidence / Effort), alineación con roadmap v1.5→v3.0, impacto en tiers de monetización, priorización | PRD mini (1 página) | Pipelines A, B, E |
+| D2 | **MERCADO** | ¿Competidores lo tienen? ¿Hay demanda validada? ¿Fortalece moat? ¿Expande TAM? Análisis de apps comparables | Market brief (5-8 bullets) | Pipelines A, D |
+| D3 | **DISEÑO UX** | Flujo de usuario, wireframe textual, WCAG AA compliance, regla 2-tap, targets geriátricos (≥72dp primarios), TalkBack, font scaling 200% | UX spec con estados y criterios | Pipelines A, B |
+| D4 | **INGENIERÍA** | Factibilidad técnica, arquitectura (LOCAL-FIRST), esfuerzo (S/M/L/XL), riesgo técnico, dependencias, archivos afectados, análisis de colateral damage | Tech assessment + file list | Pipelines A, B, C, E |
+| D5 | **FINANZAS** | Costo de desarrollo (horas IA estimadas), costo de infra (Firebase/hosting), ROI proyectado, opportunity cost (qué dejamos de hacer), impacto en pricing de tiers | Financial brief (tabla) | Pipelines A, D |
+| D6 | **MARKETING** | Posicionamiento del feature, impacto en ASO keywords, canal de comunicación, copy para Play Store/blog/redes, storytelling | Marketing brief (6-8 bullets) | Pipelines A, D |
+| D7 | **LEGAL & SEGURIDAD** | Privacy impact (LFPDPPP/GDPR/HIPAA), OWASP check, datos nuevos recopilados, T&C impact, compliance regulatorio, security review | Legal/Security checklist | Pipelines A, D, E |
+
+### Los 4 Gates (puntos de control)
+
+```
+ORDEN DEL USUARIO
+    ↓
+━━━ GATE 0: CLASIFICACIÓN (automático, <30 segundos) ━━━
+    Copilot clasifica en Pipeline A/B/C/D/E
+    Activa solo los departamentos necesarios
+    ↓
+━━━ ANÁLISIS DEPARTAMENTAL (paralelo interno) ━━━
+    D1-D7 según pipeline activado
+    ↓
+━━━ GATE 1: PRE-APROBACIÓN COPILOT ━━━
+    Compila Feature Proposal unificado
+    Scorecard 🟢🟡🔴 por departamento
+    RICE score calculado
+    Recomendación: GO / NO-GO / CONDICIONAL
+    → Presenta al usuario
+    ↓
+━━━ GATE 2: APROBACIÓN USUARIO ━━━
+    Usuario: aprueba / feedback / rechaza
+    Si feedback → Copilot ajusta → re-presenta (max 1 vuelta)
+    Si aprueba → Gate 3
+    ↓
+━━━ GATE 3: EJECUCIÓN + QA ━━━
+    Documentación → Copilot ejecuta directo
+    Código → WorkItems.md → Gemini → verificación → reporte
+    Post-ejecución: Regla #15 (diff docs) + Coherence Check
+    Target: 0-1 iteraciones correctivas (max 2)
+```
+
+### Los 5 Pipelines
+
+| Pipeline | Trigger | Deptos activados | Ejemplo | Tiempo estimado Gate 0→1 |
+|----------|---------|------------------|---------|--------------------------|
+| **A: Feature nueva** | "Agregar [funcionalidad]" | D1+D2+D3+D4+D5+D6+D7 (TODOS) | "Implementar detección de caídas con ML" | 10-15 min |
+| **B: Mejora UX** | "Cambiar [visual/interacción]" | D1+D3+D4 | "Hacer los botones más grandes" | 5-8 min |
+| **C: Bug fix** | "[Algo] no funciona" | D4 solo | "Las alertas no llegan al Monitor" | 2-3 min |
+| **D: Decisión de negocio** | "¿Deberíamos [estrategia]?" | D2+D5+D6+D7 | "¿Subimos el precio del Premium?" | 8-12 min |
+| **E: Cambio arquitectura** | "Migrar/refactorizar [sistema]" | D1+D4+D7 | "Migrar de Firestore a Supabase" | 8-10 min |
+
+### Formato del Feature Proposal (lo que ve el usuario)
+
+```
+═══ FEATURE PROPOSAL: [Nombre] ═══
+Pipeline: [A/B/C/D/E] | Fecha: [fecha] | RICE: [score]
+
+RESUMEN EJECUTIVO (3 líneas máx)
+
+📊 SCORECARD
+| Depto      | Status  | Nota clave (1 línea)         |
+|------------|---------|------------------------------|
+| PRODUCTO   | 🟢/🟡/🔴 | [insight]                    |
+| MERCADO    | 🟢/🟡/🔴 | [insight]                    |
+| DISEÑO UX  | 🟢/🟡/🔴 | [insight]                    |
+| INGENIERÍA | 🟢/🟡/🔴 | [insight]                    |
+| FINANZAS   | 🟢/🟡/🔴 | [insight]                    |
+| MARKETING  | 🟢/🟡/🔴 | [insight]                    |
+| LEGAL/SEG  | 🟢/🟡/🔴 | [insight]                    |
+(Solo deptos activados según pipeline)
+
+COSTO ESTIMADO:
+- Desarrollo: [X horas IA]
+- Infraestructura: [$X/mes adicional]
+- Opportunity cost: [qué se pospone]
+
+RIESGOS:
+- [lista numerada]
+
+IMPACTO EN ROADMAP:
+- Versión target: [v1.5/v1.6/v2.0]
+- Dependencias: [tareas previas necesarias]
+
+🏷️ RECOMENDACIÓN COPILOT: [GO / NO-GO / CONDICIONAL]
+[2-3 bullets justificando]
+
+═══ ¿APROBADO? (Sí / No / Con cambios) ═══
+```
+
+### RICE Score — Cómo se calcula
+
+| Factor | Escala | Descripción |
+|--------|--------|-------------|
+| **Reach** | 1-10 | ¿A cuántos usuarios afecta? (10=todos, 1=nicho mínimo) |
+| **Impact** | 0.25/0.5/1/2/3 | ¿Qué tan fuerte es el impacto? (3=masivo, 0.25=mínimo) |
+| **Confidence** | 10-100% | ¿Qué tan seguros estamos del impacto? (100%=datos duros, 10%=especulación) |
+| **Effort** | 1-10 | ¿Cuánto esfuerzo? (10=meses, 1=horas) |
+
+**Fórmula**: `(Reach × Impact × Confidence) / Effort`
+
+| Score | Interpretación |
+|-------|----------------|
+| >10 | Ejecutar inmediatamente |
+| 5-10 | Prioridad alta |
+| 2-5 | Evaluar contra backlog |
+| <2 | Diferir o rechazar |
+
+### Protocolo Anti-Iteraciones (target: 0-1 loops con Gemini)
+
+| # | Técnica | Cómo reduce iteraciones |
+|---|---------|-------------------------|
+| 1 | **RICE scoring** | Prioriza por datos, no intuición → menos "esto no era importante" |
+| 2 | **Pre-flight check** | Antes de WorkItems: ¿cubrí TODOS los edge cases? ¿Qué puede malinterpretar Gemini? |
+| 3 | **Especificación atómica** | SNAPSHOT + CAMBIO EXACTO + CONSERVAR → Gemini no interpreta, solo ejecuta |
+| 4 | **Test mental** | "Ejecuto" el cambio mentalmente antes de escribirlo → catch bugs pre-implementation |
+| 5 | **Max 2 iteraciones** | Si necesita 3+ → fallo de especificación, replanteo completo, no parche sobre parche |
+| 6 | **Blindaje total** | TODO lo que no se toca = listado explícito (Regla #10 reforzada) |
+
+### Excepciones al pipeline (acción directa SIN Feature Proposal)
+
+| Caso | Acción |
+|------|--------|
+| Bug fix puro (Pipeline C) | Gate 0 → D4 → WorkItems directo. Sin proposal formal. Se reporta post-fix. |
+| Typo/cosmético trivial | Copilot corrige docs directo. Se menciona en siguiente reporte. |
+| Emergencia de seguridad | Gate 0 → D4+D7 → fix INMEDIATO → report post-mortem al usuario. |
+
+---
+
+## PROCESO COPILOT (integrado con Stage-Gate)
+
+### Flujo completo cuando el usuario pide algo:
+
+1. **Gate 0**: Clasificar solicitud en Pipeline A/B/C/D/E
+2. **Análisis departamental**: Ejecutar deptos activados → compilar Feature Proposal
+3. **Gate 1**: Emitir recomendación GO/NO-GO/CONDICIONAL
+4. **Gate 2**: Presentar al usuario → esperar aprobación
+5. **Post-aprobación (Gate 3)**:
+   - a. **Leer** documentación relevante (SDD.md, SRS.md, código actual)
+   - b. **Auditar** el estado actual del código involucrado
+   - c. **Crear snapshot** de cada archivo que necesita cambiar
+   - c2. **🔴 ACTUALIZAR SRS.md + SDD.md** con el diseño aprobado ANTES de escribir WorkItems. WorkItems.md NO se escribe hasta que la documentación refleje la feature nueva. (Regla añadida Abril 2, 2026 — origen: Bubbles feature se escribió en WorkItems sin actualizar SRS/SDD)
+   - d. **Escribir WorkItems.md** con tareas atómicas + snapshots + listas cerradas
+   - e. **Después de que Gemini reporta**: Verificar con grep_search y código actual
+   - f. **Si hay collateral damage**: Documentar qué se rompió y crear nueva tarea
+   - g. **COHERENCE CHECK**: Después de CADA ronda de Gemini, verificar coherencia lógica:
+      - ¿Las notificaciones llegan al dispositivo correcto? (Terminal→Monitor, no Terminal→Terminal)
+      - ¿Los roles (Monitor/Terminal) muestran solo lo que les corresponde?
+      - ¿Los handlers de Settings funcionan en AMBOS modos (o se ocultan cuando no aplican)?
+      - ¿Los datos son dinámicos donde deben serlo (no hardcodeados)?
+      - ¿La navegación es coherente entre modos (drawer vs settings vs toolbar)?
+      - ¿El QR se muestra en Terminal y se escanea en Monitor (no al revés)?
+      - ¿Los switches/toggles realmente aplican su efecto (no solo guardan preferencia)?
+   - h. **Regla #15**: Diff obligatorio contra docs
+   - i. **Reporte al usuario**: Resumen de lo ejecutado + docs actualizados
+
+> **Origen del Coherence Check**: Testing real de Terminal reveló que campana enviaba notificación al mismo dispositivo, Settings mostraba categorías del modo opuesto, device names hardcodeados, QR Scanner accesible desde Terminal (invertido), y night mode switch sin handler.
 
 ---
 
@@ -403,6 +559,40 @@ CAMBIAR SOLO:
 3. Verificar con `Test-Path` que los archivos ya no existen
 4. Verificar con `grep` que no hay imports rotos
 5. Correr `gradlew assembleDebug` para confirmar BUILD SUCCESSFUL
+
+---
+
+## REGLA #15: DIFF OBLIGATORIO POST-GEMINI CONTRA DOCUMENTACIÓN (NUEVO — Abril 2, 2026)
+
+> **Origen**: Durante 4 rondas de bug fixes (T57-T67), Gemini modificó funcionalidades, permisos, flujos de datos y endpoints sin que Copilot actualizara SRS ni SDD. La auditoría de Abril 2 reveló 23 discrepancias código↔documentación acumuladas silenciosamente. La Regla #13 existía pero no fue ejecutada porque Copilot estaba enfocado en diagnóstico, no en documentación.
+
+**OBLIGACIÓN de Copilot INMEDIATAMENTE después de que Gemini reporta cambios**:
+
+### Paso 1: Diff de archivos modificados
+```
+¿Qué archivos .kt/.xml reporta Gemini en su git diff?
+→ Listar TODOS
+```
+
+### Paso 2: Por cada archivo modificado, verificar:
+- [ ] ¿El cambio afecta funcionalidad descrita en SRS.md? → Actualizar SRS
+- [ ] ¿El cambio afecta arquitectura/diseño técnico en SDD.md? → Actualizar SDD
+- [ ] ¿Se agregó/cambió endpoint HTTP? → Actualizar SDD §API + SRS §Comunicación
+- [ ] ¿Se agregó/cambió permiso de Android? → Actualizar SRS §Permisos
+- [ ] ¿Se cambió flujo de datos (Firestore ↔ Room ↔ HTTP)? → Actualizar SDD §Data Flow
+- [ ] ¿Se cambió comportamiento de UI? → Actualizar SRS §Interfaces
+- [ ] ¿Se agregó/cambió colección Firestore? → Actualizar SDD §Schema
+
+### Paso 3: Ejecutar actualizaciones ANTES de reportar al usuario
+- No reportar "Gemini terminó" si la documentación no está al día
+- Incluir en el reporte: "Documentación actualizada: [secciones]" o "Sin cambios en docs necesarios"
+
+### Paso 4: Regla anti-hardcoding
+- En CADA WorkItem, agregar: `PROHIBIDO: No hardcodear strings, keys, IPs, URLs, secrets, ni valores que deban ser configurables`
+- Verificar en git diff que no haya strings hardcodeados nuevos
+- Si se detectan → crear WorkItem correctivo inmediato
+
+**SANCIÓN**: Si Copilot no ejecuta este diff, el usuario puede señalarlo citando "Regla #15" y Copilot debe ejecutar el diff retroactivamente en ese momento.
 
 ---
 

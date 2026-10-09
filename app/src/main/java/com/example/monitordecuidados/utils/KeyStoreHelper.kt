@@ -70,6 +70,27 @@ object KeyStoreHelper {
         return keyGenerator.generateKey()
     }
 
+    /**
+     * T71: Genera o recupera una clave AES de 256 bits desde el Android KeyStore.
+     */
+    fun getOrCreateAesKey(alias: String): SecretKey {
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        if (keyStore.containsAlias(alias)) {
+            val entry = keyStore.getEntry(alias, null) as? KeyStore.SecretKeyEntry
+            if (entry != null) return entry.secretKey
+        }
+
+        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+        keyGenerator.init(
+            KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7)
+                .setKeySize(256)
+                .build()
+        )
+        return keyGenerator.generateKey()
+    }
+
     private fun encrypt(data: String): Pair<String, String> {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, getSecretKey())

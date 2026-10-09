@@ -7,6 +7,7 @@ import com.example.monitordecuidados.R
 import com.example.monitordecuidados.databinding.ItemTerminalStatusBinding
 
 data class TerminalInfo(
+    val id: String = "",
     val name: String,
     val status: String,     // "connected", "reconnecting", "disconnected"
     val batteryPercent: Int,

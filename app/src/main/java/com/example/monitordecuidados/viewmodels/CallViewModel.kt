@@ -35,8 +35,6 @@ class CallViewModel : ViewModel() {
     fun endCall(reason: String? = "user_ended") {
         _callState.value = CallState.Ended(reason)
         stopTimer()
-        // Reset to idle after a delay or UI transition
-        _callState.postValue(CallState.Idle)
     }
 
     fun updateCallQuality(quality: String) {

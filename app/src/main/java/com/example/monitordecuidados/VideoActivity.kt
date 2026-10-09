@@ -37,6 +37,7 @@ import java.net.DatagramSocket
 /**
  * Activity that handles video transmission and reception.
  * Phase 5: Integrated with CallViewModel for state management.
+ * T59v2: Added diagnostic logs for video streaming issues.
  */
 class VideoActivity : AppCompatActivity() {
 
@@ -103,16 +104,19 @@ class VideoActivity : AppCompatActivity() {
                             sendCommandToTerminal("ENABLE_AUDIO")
                             sendCommandToTerminal("ENABLE_VIDEO_CALL")
                         } else {
-                            // T59: mode="monitor" (silent monitoring) — pedir al Terminal que inicie streaming
+                            // T59v2: mode="monitor" (silent monitoring) — pedir al Terminal que inicie streaming
                             sendMonitorRequest()
                         }
                     } else {
                         // Terminal side
+                        Log.d(TAG, "Terminal side: auto_accept=${intent.getBooleanExtra("auto_accept", false)}, remoteIp=$remoteIp, videoManager=${videoManager != null}")
                         if (intent.getBooleanExtra("auto_accept", false)) {
                             if (isAudioOnly) {
                                 startAudioMode()
                             } else {
+                                Log.d(TAG, "Terminal: starting streaming to $remoteIp")
                                 videoManager?.startStreaming()
+                                if (videoManager == null) Log.e(TAG, "Terminal: videoManager is NULL — cannot stream")
                                 if (isVideoCallActive) {
                                     callViewModel.acceptCall(remoteIp ?: "unknown")
                                     callManager?.startCall()
@@ -235,6 +239,7 @@ class VideoActivity : AppCompatActivity() {
         if (currentRol == "monitor") {
             sendCommandToTerminal("STOP_SESSION")
             if (isAudioOnly) sendCommandToTerminal("STOP_AUDIO_CALL")
+            sendCommandToTerminal("STOP_MONITOR")
         }
         callViewModel.endCall("user_hung_up")
     }
@@ -284,6 +289,7 @@ class VideoActivity : AppCompatActivity() {
     private fun startReceivingVideo() {
         if (isReceiving) return
         isReceiving = true
+        Log.d(TAG, "startReceivingVideo: opening UDP socket on port 9001")
         Thread {
             try {
                 udpSocket = DatagramSocket(9001)
@@ -314,9 +320,13 @@ class VideoActivity : AppCompatActivity() {
         }.start()
     }
 
-    // T59: Pedir al Terminal que inicie streaming
+    // T59v2: Pedir al Terminal que inicie streaming con logs de diagnóstico
     private fun sendMonitorRequest() {
-        if (remoteIp == null) return
+        if (remoteIp == null) {
+            Log.e(TAG, "sendMonitorRequest: remoteIp is NULL, cannot request")
+            return
+        }
+        Log.d(TAG, "sendMonitorRequest: sending to $remoteIp:8080/request_monitor")
         Thread {
             try {
                 val url = java.net.URL("http://$remoteIp:8080/request_monitor")
@@ -325,10 +335,11 @@ class VideoActivity : AppCompatActivity() {
                 conn.connectTimeout = 3000
                 conn.doOutput = true
                 conn.outputStream.write("source=monitor".toByteArray())
-                conn.responseCode
+                val responseCode = conn.responseCode
+                Log.d(TAG, "sendMonitorRequest: response=$responseCode")
                 conn.disconnect()
             } catch (e: Exception) {
-                Log.e(TAG, "Error requesting monitor streaming", e)
+                Log.e(TAG, "sendMonitorRequest FAILED: ${e.message}", e)
             }
         }.start()
     }
@@ -343,6 +354,53 @@ class VideoActivity : AppCompatActivity() {
             }
             override fun onResponse(call: Call, response: Response) { response.close() }
         })
+    }
+
+    // T65: Reintenta streaming/receiving después de otorgar permisos
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (grantResults.isNotEmpty() && grantResults.all { it == android.content.pm.PackageManager.PERMISSION_GRANTED }) {
+            // Permisos otorgados — reiniciar flujo
+            lifecycleScope.launch {
+                if (currentRol == "monitor") {
+                    if (!isAudioOnly && !isReceiving) startReceivingVideo()
+                    if (isAudioOnly) {
+                        startAudioMode()
+                    } else if (isVideoCallActive) {
+                        callViewModel.initiateCall(remoteIp ?: "unknown")
+                        sendCommandToTerminal("ENABLE_AUDIO")
+                        sendCommandToTerminal("ENABLE_VIDEO_CALL")
+                    } else {
+                        sendMonitorRequest()
+                    }
+                } else {
+                    // Terminal side — reiniciar streaming
+                    // T81: Asegurar que videoManager/callManager existen post-permisos
+                    if (remoteIp == null) {
+                        remoteIp = EncryptedPreferencesHelper.getString(this@VideoActivity, "paired_terminal_ip")
+                            ?: getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE)
+                                .getString("paired_monitor_ip", null)
+                    }
+                    if (remoteIp != null) {
+                        if (videoManager == null) videoManager = VideoManager(this@VideoActivity, remoteIp!!, 9001)
+                        if (callManager == null) callManager = CallManager(remoteIp!!, 9000)
+                    } else {
+                        Log.e(TAG, "T81: remoteIp STILL null after permission grant — cannot start streaming")
+                    }
+                    if (intent.getBooleanExtra("auto_accept", false)) {
+                        if (isAudioOnly) {
+                            startAudioMode()
+                        } else {
+                            videoManager?.startStreaming()
+                            if (isVideoCallActive) {
+                                callViewModel.acceptCall(remoteIp ?: "unknown")
+                                callManager?.startCall()
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun onDestroy() {

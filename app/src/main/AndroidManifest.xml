@@ -73,6 +73,14 @@
             android:theme="@style/Theme.MonitorDeCuidados"
             android:exported="false" />
 
+        <activity
+            android:name=".BubbleRadialActivity"
+            android:theme="@style/Theme.MonitorDeCuidados"
+            android:exported="false"
+            android:allowEmbedded="true"
+            android:resizeableActivity="true"
+            android:documentLaunchMode="always" />
+
         <service
             android:name=".CampanaService"
             android:enabled="true"

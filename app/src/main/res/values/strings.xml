@@ -150,6 +150,8 @@
     <!-- ACCESSIBILITY contentDescriptions -->
     <string name="cd_bell_button">Tocar para pedir ayuda al cuidador</string>
     <string name="cd_settings_button">Abrir configuración</string>
+    <string name="controls_button">Controles</string>
+    <string name="cd_terminal_info_bubble">Información del terminal</string>
     <string name="cd_connection_status">Estado de conexión: %s</string>
     <string name="cd_back_button">Volver atrás</string>
     <string name="cd_menu_button">Abrir menú de navegación</string>

@@ -10,9 +10,14 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * Adapter for Bell (Campanazo) events.
+ * Adapter for Bell (Campanazo) and other alerts.
+ * T84: Grouped by terminal, with call/monitor actions.
  */
-class AlertAdapter(private var alerts: List<Event>) : RecyclerView.Adapter<AlertAdapter.AlertViewHolder>() {
+class AlertAdapter(
+    private var alerts: List<Event>,
+    private val onCallClick: ((Event) -> Unit)? = null,
+    private val onMonitorClick: ((Event) -> Unit)? = null
+) : RecyclerView.Adapter<AlertAdapter.AlertViewHolder>() {
 
     class AlertViewHolder(val binding: ItemAlertCampanaBinding) : RecyclerView.ViewHolder(binding.root)
 
@@ -26,7 +31,23 @@ class AlertAdapter(private var alerts: List<Event>) : RecyclerView.Adapter<Alert
         holder.binding.tvAlertMessage.text = alert.message
         val timeString = formatTimestamp(alert.timestamp)
         holder.binding.tvAlertTime.text = timeString
-        holder.binding.tvAlertIcon.text = "🛎️"
+
+        // T84: Mostrar nombre del terminal fuente
+        holder.binding.tvTerminalName.text = alert.sourceTerminalName.ifBlank { alert.sourceIp }
+
+        // T69: Dynamic icon based on type
+        holder.binding.tvAlertIcon.text = when(alert.type) {
+            "bell" -> "🔔"
+            "shake" -> "⚠️"
+            "voice" -> "🎙️"
+            "battery_low" -> "🔋"
+            "alarm" -> "⏰"
+            else -> "🛎️"
+        }
+
+        // T84: Acciones por terminal
+        holder.binding.btnCall.setOnClickListener { onCallClick?.invoke(alert) }
+        holder.binding.btnMonitor.setOnClickListener { onMonitorClick?.invoke(alert) }
 
         // Accessibility
         holder.itemView.contentDescription = holder.itemView.context.getString(

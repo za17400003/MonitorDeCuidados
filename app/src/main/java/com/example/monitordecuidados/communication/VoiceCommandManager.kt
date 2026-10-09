@@ -66,6 +66,8 @@ class VoiceCommandManager(
         updateSensitivityFromPrefs() // Refresh before starting
 
         scope.launch(Dispatchers.Main) {
+            // T62: Destruir instancia anterior para evitar resource leak
+            speechRecognizer?.destroy()
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
                 setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
@@ -78,7 +80,6 @@ class VoiceCommandManager(
                         // Detection based on adapted threshold
                         if (rmsdB > minRmsdB) {
                             // listener.onKeywordDetected("¡GRITO DETECTADO!") 
-                            // Note: We might want to handle shouts separately or just use it as activation
                         }
                     }
                     override fun onBufferReceived(buffer: ByteArray?) {}
@@ -96,7 +97,10 @@ class VoiceCommandManager(
                         Log.e("VoiceManager", "Error: $message")
                         isListening = false
                         if (error != SpeechRecognizer.ERROR_RECOGNIZER_BUSY && speechRecognizer != null) {
-                            startListening()
+                            // T62: Pequeño delay para no saturar el reconocedor
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                if (speechRecognizer != null) startListening()
+                            }, 500)
                         }
                     }
 
@@ -106,7 +110,10 @@ class VoiceCommandManager(
                             processDetectedText(text)
                         }
                         isListening = false
-                        if (speechRecognizer != null) startListening()
+                        // T62: Pequeño delay para no saturar el reconocedor
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            if (speechRecognizer != null) startListening()
+                        }, 300)
                     }
 
                     override fun onPartialResults(partialResults: Bundle?) {
@@ -190,6 +197,6 @@ class VoiceCommandManager(
         speechRecognizer?.stopListening()
         speechRecognizer?.destroy()
         speechRecognizer = null
-        scope.cancel()
+        // T62: NO cancelar scope — la instancia se destruye completa en refreshServices()
     }
 }

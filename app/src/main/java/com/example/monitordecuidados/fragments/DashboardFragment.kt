@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -13,12 +15,16 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.monitordecuidados.QRScannerActivity
 import com.example.monitordecuidados.R
 import com.example.monitordecuidados.TerminalDetailActivity
-import com.example.monitordecuidados.VideoActivity
 import com.example.monitordecuidados.adapters.AlertAdapter
 import com.example.monitordecuidados.adapters.TerminalStatusAdapter
+import com.example.monitordecuidados.adapters.TerminalInfo
+import com.example.monitordecuidados.data.local.Event
 import com.example.monitordecuidados.databinding.LayoutMonitorContentBinding
+import com.example.monitordecuidados.utils.EncryptedPreferencesHelper
 import com.example.monitordecuidados.viewmodels.ConnectionViewModel
 import com.example.monitordecuidados.viewmodels.NotificationViewModel
+import org.json.JSONObject
+import java.net.URL
 
 class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
 
@@ -30,6 +36,18 @@ class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
 
     private lateinit var alertAdapter: AlertAdapter
     private lateinit var terminalAdapter: TerminalStatusAdapter
+
+    // T61: Polling terminals battery/status
+    private val pollHandler = Handler(Looper.getMainLooper())
+    private var currentTerminals: List<TerminalInfo> = emptyList()
+    private val pollRunnable = object : Runnable {
+        override fun run() {
+            if (currentTerminals.isNotEmpty()) {
+                queryTerminalStatuses(currentTerminals)
+            }
+            pollHandler.postDelayed(this, 10000) // Cada 10 segundos
+        }
+    }
 
     companion object {
         private const val REQUEST_CAMERA_PERMISSION = 3001
@@ -45,14 +63,19 @@ class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
     }
 
     private fun setupRecyclerViews() {
-        // Alertas Activas
-        alertAdapter = AlertAdapter(emptyList())
+        // Alertas Activas - T84: Pasar callbacks para LLAMAR/MONITOREAR
+        alertAdapter = AlertAdapter(
+            alerts = emptyList(),
+            onCallClick = { event -> navigateToTerminalDetail(event, autoCall = true) },
+            onMonitorClick = { event -> navigateToMonitor(event) }
+        )
         binding.rvActiveAlerts.layoutManager = LinearLayoutManager(requireContext())
         binding.rvActiveAlerts.adapter = alertAdapter
 
         // Mis Terminales - T36: Navegación al detalle
         terminalAdapter = TerminalStatusAdapter(emptyList()) { terminal ->
             val intent = Intent(requireContext(), TerminalDetailActivity::class.java).apply {
+                putExtra("terminal_id", terminal.id) // T70: DashboardFragment pase terminal_id
                 putExtra("terminal_name", terminal.name)
                 putExtra("terminal_status", terminal.status)
             }
@@ -62,24 +85,34 @@ class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
         binding.rvTerminals.adapter = terminalAdapter
     }
 
+    private fun navigateToTerminalDetail(event: Event, autoCall: Boolean = false) {
+        startActivity(Intent(requireContext(), TerminalDetailActivity::class.java).apply {
+            putExtra("terminal_id", event.sourceIp)
+            putExtra("terminal_name", event.sourceTerminalName.ifBlank { "Terminal" })
+            putExtra("terminal_status", "connected")
+            if (autoCall) putExtra("auto_call", true)
+        })
+    }
+
+    private fun navigateToMonitor(event: Event) {
+        val ip = event.sourceIp
+        startActivity(Intent(requireContext(), com.example.monitordecuidados.VideoActivity::class.java).apply {
+            putExtra("mode", "monitor")
+            putExtra("remote_ip", ip)
+        })
+    }
+
     private fun setupObservers() {
-        notificationViewModel.notificationList.observe(viewLifecycleOwner) { list ->
-            val alerts = list.map {
-                com.example.monitordecuidados.data.local.Event(
-                    timestamp = it.timestamp?.toDate()?.time ?: 0L,
-                    type = it.type ?: "unknown",
-                    message = it.body ?: "",
-                    sourceIp = "",
-                    sourceTerminalName = it.title ?: "Desconocido"
-                )
-            }
-            alertAdapter.updateData(alerts)
-            binding.tvNoAlerts.visibility = if (alerts.isEmpty()) View.VISIBLE else View.GONE
+        // T69: DashboardFragment LOCAL-FIRST — leer alertas de Room DB
+        notificationViewModel.notificationList.observe(viewLifecycleOwner) { events ->
+            alertAdapter.updateData(events)
+            binding.tvNoAlerts.visibility = if (events.isEmpty()) View.VISIBLE else View.GONE
         }
 
         connectionViewModel.pairingsList.observe(viewLifecycleOwner) { pairings ->
             var terminals = pairings.map {
-                com.example.monitordecuidados.adapters.TerminalInfo(
+                TerminalInfo(
+                    id = it.terminalId, // T70 requirement
                     name = it.name ?: "Terminal",
                     status = it.status ?: "disconnected",
                     batteryPercent = it.batteryLevel ?: 0,
@@ -87,15 +120,14 @@ class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
                 )
             }
             
-            // T35: Fallback local — si Firestore no devolvió terminales, mostrar la terminal vinculada desde SharedPreferences
+            // T35: Fallback local
             if (terminals.isEmpty()) {
-                val localTerminalId = com.example.monitordecuidados.utils.EncryptedPreferencesHelper
-                    .getString(requireContext(), "paired_terminal_id")
+                val localTerminalId = EncryptedPreferencesHelper.getString(requireContext(), "paired_terminal_id")
                 if (!localTerminalId.isNullOrEmpty()) {
-                    val localName = com.example.monitordecuidados.utils.EncryptedPreferencesHelper
-                        .getString(requireContext(), "paired_terminal_name") ?: "Terminal"
+                    val localName = EncryptedPreferencesHelper.getString(requireContext(), "paired_terminal_name") ?: "Terminal"
                     terminals = listOf(
-                        com.example.monitordecuidados.adapters.TerminalInfo(
+                        TerminalInfo(
+                            id = localTerminalId,
                             name = localName,
                             status = "disconnected",
                             batteryPercent = 0,
@@ -105,10 +137,10 @@ class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
                 }
             }
 
+            currentTerminals = terminals
             terminalAdapter.updateData(terminals)
             binding.tvNoTerminals.visibility = if (terminals.isEmpty()) View.VISIBLE else View.GONE
             
-            // T39-D: Consultar estado real de cada terminal
             if (terminals.isNotEmpty()) {
                 queryTerminalStatuses(terminals)
             }
@@ -117,22 +149,21 @@ class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
         connectionViewModel.getPairingsList()
     }
 
-    private fun queryTerminalStatuses(terminals: List<com.example.monitordecuidados.adapters.TerminalInfo>) {
+    private fun queryTerminalStatuses(terminals: List<TerminalInfo>) {
         for (terminal in terminals) {
-            val terminalIp = com.example.monitordecuidados.utils.EncryptedPreferencesHelper
-                .getString(requireContext(), "paired_terminal_ip")
+            val terminalIp = EncryptedPreferencesHelper.getString(requireContext(), "paired_terminal_ip")
             if (terminalIp == null) continue
             
             Thread {
                 try {
-                    val url = java.net.URL("http://$terminalIp:8080/status")
+                    val url = URL("http://$terminalIp:8080/status")
                     val conn = url.openConnection() as java.net.HttpURLConnection
                     conn.requestMethod = "GET"
                     conn.connectTimeout = 2000
                     conn.readTimeout = 2000
                     if (conn.responseCode == 200) {
                         val response = conn.inputStream.bufferedReader().readText()
-                        val json = org.json.JSONObject(response)
+                        val json = JSONObject(response)
                         val batteryLevel = json.optInt("batteryLevel", 0)
                         val status = json.optString("status", "connected")
                         
@@ -142,10 +173,10 @@ class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
                                 status = status,
                                 connectionType = "local"
                             )
-                            val adapter = binding.rvTerminals.adapter as? com.example.monitordecuidados.adapters.TerminalStatusAdapter
+                            val adapter = binding.rvTerminals.adapter as? TerminalStatusAdapter
                             adapter?.let {
                                 val currentList = it.getData().toMutableList()
-                                val idx = currentList.indexOfFirst { t -> t.name == terminal.name }
+                                val idx = currentList.indexOfFirst { t -> t.id == terminal.id }
                                 if (idx >= 0) {
                                     currentList[idx] = updated
                                     it.updateData(currentList)
@@ -154,9 +185,27 @@ class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
                         }
                     }
                     conn.disconnect()
-                } catch (e: Exception) {
-                    // Silent catch as per T39-D
-                }
+
+                    // T75: Periodic heal
+                    try {
+                        val myIp = com.example.monitordecuidados.utils.NetworkUtils.getLocalIpAddress()
+                        if (myIp != null) {
+                            val healUrl = java.net.URL("http://$terminalIp:8080/confirm_pairing")
+                            val healConn = healUrl.openConnection() as java.net.HttpURLConnection
+                            healConn.requestMethod = "POST"
+                            healConn.connectTimeout = 2000
+                            healConn.setRequestProperty("Content-Type", "application/json")
+                            healConn.doOutput = true
+                            val healJson = org.json.JSONObject().apply {
+                                put("monitorName", android.os.Build.MODEL)
+                                put("monitorIp", myIp)
+                            }
+                            healConn.outputStream.write(healJson.toString().toByteArray())
+                            healConn.responseCode // Consume response
+                            healConn.disconnect()
+                        }
+                    } catch (_: Exception) { }
+                } catch (e: Exception) { }
             }.start()
         }
     }
@@ -164,6 +213,12 @@ class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
     override fun onResume() {
         super.onResume()
         connectionViewModel.getPairingsList()
+        pollHandler.post(pollRunnable)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        pollHandler.removeCallbacks(pollRunnable)
     }
 
     private fun setupListeners() {
@@ -183,20 +238,13 @@ class DashboardFragment : Fragment(R.layout.layout_monitor_content) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startActivity(Intent(requireContext(), QRScannerActivity::class.java))
             } else {
-                if (!shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
-                    Toast.makeText(requireContext(), 
-                        "Permiso de cámara requerido. Actívalo en Ajustes → Permisos", 
-                        Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(requireContext(), 
-                        "Se necesita la cámara para escanear el código QR", 
-                        Toast.LENGTH_SHORT).show()
-                }
+                Toast.makeText(requireContext(), "Se necesita la cámara para escanear el código QR", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     override fun onDestroyView() {
+        pollHandler.removeCallbacks(pollRunnable)
         super.onDestroyView()
         _binding = null
     }

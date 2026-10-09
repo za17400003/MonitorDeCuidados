@@ -55,10 +55,13 @@ class CallManager(@NonNull private val remoteIp: String, private val port: Int) 
         Thread {
             try {
                 socket?.close()
-                socket = DatagramSocket(port).apply {
-                    receiveBufferSize = 1024 * 64
+                // T87: Create unbound socket, set reuseAddress BEFORE binding.
+                // DatagramSocket(port) binds immediately — reuseAddress set after has no effect.
+                socket = DatagramSocket(null).apply {
                     reuseAddress = true
+                    receiveBufferSize = 1024 * 64
                     soTimeout = SOCKET_TIMEOUT
+                    bind(java.net.InetSocketAddress(port))
                 }
                 
                 FileLogger.logInfo(TAG, "Llamada iniciada hacia $remoteIp:$port")
@@ -128,16 +131,23 @@ class CallManager(@NonNull private val remoteIp: String, private val port: Int) 
             )
             
             if (recorder.state != AudioRecord.STATE_INITIALIZED) {
-                FileLogger.logCritical(TAG, "AudioRecord no se pudo inicializar")
+                FileLogger.logCritical(TAG, "T82: AudioRecord no inicializado — ¿RECORD_AUDIO otorgado?")
+                Log.e(TAG, "T82: AudioRecord STATE_UNINITIALIZED. Permission RECORD_AUDIO may be missing.")
                 return
             }
 
-            // T47: OPUS Encoder setup
+            // T47/T87: OPUS Encoder setup — log explicit error if codec unavailable
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_OPUS, SAMPLE_RATE, 1)
             format.setInteger(MediaFormat.KEY_BIT_RATE, 16000)
-            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)
-            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            encoder.start()
+            try {
+                encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)
+                encoder!!.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                encoder!!.start()
+            } catch (e: Exception) {
+                FileLogger.logCritical(TAG, "T87: OPUS encoder NOT available on this device. Call audio will not work.", e)
+                Log.e(TAG, "T87: OPUS encoder creation failed — codec not supported?", e)
+                return
+            }
 
             val pcmBuffer = ByteArray(960 * 2) // 60ms at 16kHz
             val address = InetAddress.getByName(remoteIp)

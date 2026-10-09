@@ -17,8 +17,8 @@ class UserViewModel : ViewModel() {
     private val _preferences = MutableLiveData<UserPreferences>()
     val preferences: LiveData<UserPreferences> = _preferences
 
-    private val auth = FirebaseService.auth
-    private val db = FirebaseService.db
+    private val auth by lazy { FirebaseService.auth }
+    private val db by lazy { FirebaseService.db }
 
     fun login(email: String, password: String) {
         _userState.value = UserState.Loading

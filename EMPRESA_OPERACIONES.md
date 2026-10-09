@@ -8,33 +8,46 @@ Toda la operación funciona con IA + herramientas automatizadas. No hay empleado
 ### Organigrama
 
 ```
-José Esaú Díaz Hernández (Propietario / Accionista único)
+José Esaú Díaz Hernández (Propietario / Accionista único / Product Owner)
+│   → Aprueba Feature Proposals (Gate 2)
+│   → Da feedback y visto bueno final
+│   → Testing manual en dispositivo real
 │
-└── Copilot — CEO / CTO (IA)
+└── Copilot — CEO / CTO (IA) — Opera 7 departamentos virtuales
     │
-    ├── DESARROLLO
-    │   ├── Copilot: Arquitectura, specs, auditoría, WorkItems
-    │   ├── Gemini: Implementación de código (Android Kotlin)
+    ├── D1: PRODUCTO (PRD, RICE scoring, roadmap alignment, tier impact)
+    │
+    ├── D2: MERCADO (competitive analysis, demanda, moat, TAM)
+    │
+    ├── D3: DISEÑO UX (WCAG AA, 2-tap rule, geriátrico, TalkBack, wireframes)
+    │
+    ├── D4: INGENIERÍA
+    │   ├── Copilot: Arquitectura, specs, auditoría, WorkItems, verificación
+    │   ├── Gemini: Implementación de código (Android Kotlin) — solo lo que dice WorkItems.md
     │   └── CI/CD: GitHub Actions (build + test automáticos)
     │
-    ├── QA
-    │   ├── Copilot: Test plans, verificación post-implementación
-    │   ├── Firebase Test Lab: Testing automatizado en dispositivos
-    │   └── Propietario: Testing manual en dispositivo real
+    ├── D5: FINANZAS (costos, ROI, opportunity cost, pricing, P&L)
     │
-    ├── LEGAL / COMPLIANCE
-    │   ├── Copilot: Redacción de avisos de privacidad, T&C, compliance LFPDPPP
-    │   └── Contador externo: Obligaciones fiscales SAT (servicio contratado por honorarios)
-    │
-    ├── MARKETING
+    ├── D6: MARKETING (ASO, copy, positioning, canales, contenido)
     │   ├── Copilot: Estrategia, ASO, copy
     │   ├── IA generativa: Creación de assets (íconos, screenshots, videos promo)
     │   └── Redes sociales: Publicaciones automatizadas
     │
-    └── FINANZAS
-        ├── Copilot: Proyecciones, pricing, análisis de métricas
-        └── PAC + Contador: Facturación + declaraciones
+    └── D7: LEGAL & SEGURIDAD
+        ├── Copilot: Privacy impact, OWASP, LFPDPPP/GDPR, T&C, compliance
+        └── Contador externo: Obligaciones fiscales SAT (servicio por honorarios)
+
+PIPELINE OPERATIVO (Lean Stage-Gate):
+    Orden del usuario
+    → Gate 0: Clasificación (Pipeline A/B/C/D/E)
+    → Análisis departamental (deptos activados en paralelo)
+    → Gate 1: Feature Proposal + recomendación GO/NO-GO
+    → Gate 2: Aprobación del propietario
+    → Gate 3: Ejecución (docs: Copilot | código: Gemini) + QA
 ```
+
+> **Modelo**: Lean Stage-Gate AI-First (Abril 2, 2026)
+> **Detalle completo del pipeline**: Ver DEVELOPMENT_WORKFLOW.md §ESTRUCTURA ORGANIZACIONAL
 
 ---
 

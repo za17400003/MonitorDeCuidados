@@ -37,7 +37,7 @@ import java.util.concurrent.Executors
 /**
  * Activity for scanning QR codes to pair Monitor and Terminal.
  * Phase 5: Integrated with ConnectionViewModel.
- * M5 Fix: Use View instead of ScanningOverlay.
+ * T57v2: Synchronous pairing confirmation before navigation.
  */
 class QRScannerActivity : AppCompatActivity() {
 
@@ -128,22 +128,22 @@ class QRScannerActivity : AppCompatActivity() {
                 .putString("paired_terminal_ip", ip)
                 .apply()
 
-            // T32-FIX: Navegación INMEDIATA independiente de Firestore write.
-            // SharedPreferences ya están guardadas. Firestore es fire-and-forget.
-            // El snapshotListener en DashboardFragment se actualizará automáticamente cuando aparezca el documento.
             connectionViewModel.addPairing(deviceId, name, "internet")
             
-            runOnUiThread {
-                Toast.makeText(this, "Terminal vinculada correctamente", Toast.LENGTH_SHORT).show()
-                val intent = Intent(this, MonitorMainActivity::class.java)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                startActivity(intent)
-                finish()
-            }
-            
-            // Phase 5: Fire-and-forget background pairing confirmation
+            // T57v2: Confirm pairing BEFORE navigating - synchronous with retry
             Thread {
-                confirmPairingToTerminal(ip, port)
+                val pairingSuccess = confirmPairingToTerminalSync(ip, port)
+                runOnUiThread {
+                    if (pairingSuccess) {
+                        Toast.makeText(this, "Terminal vinculada correctamente", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, "Vinculada (verificación pendiente)", Toast.LENGTH_LONG).show()
+                    }
+                    val intent = Intent(this, MonitorMainActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    startActivity(intent)
+                    finish()
+                }
             }.start()
 
         } catch (e: Exception) {
@@ -152,42 +152,34 @@ class QRScannerActivity : AppCompatActivity() {
         }
     }
 
-    private fun confirmPairingToTerminal(terminalIp: String, port: Int) {
+    private fun confirmPairingToTerminalSync(terminalIp: String, port: Int): Boolean {
         val myIp = NetworkUtils.getLocalIpAddress() ?: "0.0.0.0"
         val myName = android.os.Build.MODEL
-        
-        // T38-E: Use HTTP first for pairing confirmation as Terminal server is HTTP.
-        val url = "http://$terminalIp:$port/confirm_pairing"
         val json = JSONObject().apply {
             put("monitorName", myName)
             put("monitorIp", myIp)
         }
-        
         val body = json.toString().toRequestBody("application/json".toMediaType())
-        val request = Request.Builder().url(url).post(body).build()
 
-        httpClient.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                // Fallback to HTTPS just in case
-                val httpsUrl = "https://$terminalIp:$port/confirm_pairing"
-                val httpsRequest = Request.Builder().url(httpsUrl).post(body).build()
-                httpClient.newCall(httpsRequest).enqueue(object : Callback {
-                    override fun onFailure(call: Call, e: IOException) {
-                        Log.e("QRScanner", "Failed to confirm pairing (HTTP+HTTPS): ${e.message}")
-                    }
-                    override fun onResponse(call: Call, response: Response) { handleResponse(response) }
-                })
+        // 3 attempts with backoff: 0s, 1s, 2s
+        for (attempt in 1..3) {
+            try {
+                val url = "http://$terminalIp:$port/confirm_pairing"
+                val request = Request.Builder().url(url).post(body).build()
+                val response = httpClient.newCall(request).execute() // SÍNCRONO
+                val code = response.code
+                response.close()
+                if (code in 200..299) {
+                    Log.d("QRScanner", "Pairing confirmed on attempt $attempt, response: $code")
+                    return true
+                }
+            } catch (e: Exception) {
+                Log.w("QRScanner", "Pairing attempt $attempt failed: ${e.message}")
             }
-
-            override fun onResponse(call: Call, response: Response) {
-                handleResponse(response)
-            }
-        })
-    }
-    
-    private fun handleResponse(response: Response) {
-        Log.d("QRScanner", "Pairing confirmation response: ${response.code}")
-        response.close()
+            if (attempt < 3) try { Thread.sleep(attempt * 1000L) } catch (e: Exception) {}
+        }
+        Log.e("QRScanner", "Pairing confirmation failed after 3 attempts")
+        return false
     }
 
     private class BarcodeAnalyzer(

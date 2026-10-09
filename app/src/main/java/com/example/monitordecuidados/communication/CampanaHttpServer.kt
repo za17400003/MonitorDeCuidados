@@ -4,6 +4,7 @@ import fi.iki.elonen.NanoHTTPD
 import org.json.JSONObject
 import android.util.Log
 import android.util.Base64
+import android.content.Context
 import com.example.monitordecuidados.security.SecurityConfig
 import java.io.InputStream
 import java.security.KeyStore
@@ -12,15 +13,17 @@ import javax.crypto.spec.IvParameterSpec
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 
-class CampanaHttpServer(port: Int, private val listener: OnServerEventListener) : NanoHTTPD(port) {
+class CampanaHttpServer(
+    port: Int,
+    private val context: Context,
+    private val listener: OnServerEventListener
+) : NanoHTTPD(port) {
 
     private val rateLimiter = RateLimiter()
+    private val TAG = "CampanaHttpServer"
 
     // AES Configuration matching Terminal
     private val AES_ALGORITHM = "AES/CBC/PKCS5Padding"
-    // Resolved: Using centralized security config
-    private val AES_KEY = SecurityConfig.AES_KEY
-    private val AES_IV = SecurityConfig.AES_IV
 
     interface OnServerEventListener {
         fun onBellTriggered(sourceIp: String)
@@ -33,15 +36,28 @@ class CampanaHttpServer(port: Int, private val listener: OnServerEventListener) 
         fun onStatusRequested(): JSONObject
     }
 
+    /**
+     * T71: Descifrado con IV dinámico (extraído de los primeros 16 bytes)
+     * y clave desde KeyStore.
+     */
     private fun decryptBody(encryptedText: String): String {
         return try {
+            val combined = Base64.decode(encryptedText, Base64.NO_WRAP)
+            if (combined.size < 16) return encryptedText // Not encrypted or too short
+
+            val iv = ByteArray(16)
+            System.arraycopy(combined, 0, iv, 0, 16)
+            val encrypted = ByteArray(combined.size - 16)
+            System.arraycopy(combined, 16, encrypted, 0, encrypted.size)
+
             val cipher = Cipher.getInstance(AES_ALGORITHM)
-            cipher.init(Cipher.DECRYPT_MODE, AES_KEY, AES_IV)
-            val decoded = Base64.decode(encryptedText, Base64.NO_WRAP)
-            val decrypted = cipher.doFinal(decoded)
+            val key = SecurityConfig.getAesKey(context)
+            cipher.init(Cipher.DECRYPT_MODE, key, IvParameterSpec(iv))
+
+            val decrypted = cipher.doFinal(encrypted)
             String(decrypted)
         } catch (e: Exception) {
-            // Log.w("CampanaHttpServer", "Decryption failed, assuming plain text")
+            // Si falla el descifrado, podría ser texto plano (compatibilidad)
             encryptedText
         }
     }
@@ -57,9 +73,9 @@ class CampanaHttpServer(port: Int, private val listener: OnServerEventListener) 
             sslContext.init(keyManagerFactory.keyManagers, null, null)
             
             makeSecure(sslContext.serverSocketFactory, null)
-            Log.d("CampanaHttpServer", "HTTPS enabled")
+            Log.d(TAG, "HTTPS enabled")
         } catch (e: Exception) {
-            Log.e("CampanaHttpServer", "Failed to enable HTTPS: ${e.message}")
+            Log.e(TAG, "Failed to enable HTTPS: ${e.message}")
         }
     }
 
@@ -68,7 +84,7 @@ class CampanaHttpServer(port: Int, private val listener: OnServerEventListener) 
         val method = session.method
         val remoteIp = session.remoteIpAddress ?: "unknown"
         
-        Log.d("CampanaHttpServer", "Received $method request for $uri from $remoteIp")
+        Log.d(TAG, "Received $method request for $uri from $remoteIp")
 
         if (!rateLimiter.isAllowed(remoteIp)) {
             return newFixedLengthResponse(Response.Status.TOO_MANY_REQUESTS, 
@@ -78,6 +94,13 @@ class CampanaHttpServer(port: Int, private val listener: OnServerEventListener) 
 
         // T39-A: GET /status endpoint
         if (method == Method.GET && uri == "/status") {
+            // T74: Self-heal — guardar IP del Monitor que hace polling
+            val prefs = context.getSharedPreferences("monitordecuidados_prefs", Context.MODE_PRIVATE)
+            val currentMonitorIp = prefs.getString("paired_monitor_ip", null)
+            if (currentMonitorIp == null || currentMonitorIp != remoteIp) {
+                prefs.edit().putString("paired_monitor_ip", remoteIp).apply()
+                Log.d(TAG, "T74: paired_monitor_ip updated to $remoteIp (was $currentMonitorIp)")
+            }
             val statusJson = listener.onStatusRequested()
             return newFixedLengthResponse(Response.Status.OK, "application/json", statusJson.toString())
         }
@@ -99,6 +122,7 @@ class CampanaHttpServer(port: Int, private val listener: OnServerEventListener) 
                 if (postData.isNotEmpty()) {
                     when (uri) {
                         "/", "/trigger_bell" -> {
+                            Log.d(TAG, "T68-TRACE: /trigger_bell received from $remoteIp")
                             val json = try { JSONObject(postData) } catch (e: Exception) { JSONObject() }
                             val message = json.optString("message", "")
                             if (message.contains("Voz")) {
@@ -111,10 +135,12 @@ class CampanaHttpServer(port: Int, private val listener: OnServerEventListener) 
                             return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"success\"}")
                         }
                         "/alert/shake" -> {
+                            Log.d(TAG, "T68-TRACE: /alert/shake received from $remoteIp")
                             listener.onShakeTriggered(remoteIp)
                             return newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"success\"}")
                         }
                         "/trigger_voice" -> {
+                            Log.d(TAG, "T68-TRACE: /trigger_voice received from $remoteIp")
                             val json = try { JSONObject(postData) } catch (e: Exception) { JSONObject() }
                             val text = json.optString("text", "")
                             listener.onVoiceTriggered(text, remoteIp)
@@ -147,7 +173,7 @@ class CampanaHttpServer(port: Int, private val listener: OnServerEventListener) 
                     }
                 }
             } catch (e: Exception) {
-                Log.e("CampanaHttpServer", "Error parsing request: ${e.message}")
+                Log.e(TAG, "Error parsing request: ${e.message}")
                 return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Error: ${e.message}")
             }
         }

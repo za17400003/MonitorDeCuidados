@@ -1,8 +1,8 @@
 # 🛠️ DOCUMENTACIÓN TÉCNICA v3.0 - Monitor de Cuidados
 
-**Última actualización**: Abril 1, 2026  
-**Versión**: 3.4 (T44-T56 implementados. 5 bugs encontrados en testing dispositivo real: T57-T61 pendientes. Bell chime migrado a MP3)  
-**Estado**: Arquitectura Completa - 5 bugs de integración pendientes (WorkItems v15.0)
+**Última actualización**: Abril 2, 2026
+**Versión**: 3.5 (Auditoría código↔docs: mDNS type corregido, NsdManager documentado, T63-T67 aplicados. Arquitectura LOCAL-FIRST declarada)
+**Estado**: Arquitectura Completa - Bugs de alerta pendientes (WorkItems v18.0)
 
 ---
 
@@ -21,7 +21,7 @@
   - Puerto 8080: Comandos de control (JSON).
   - Puerto 9001: Streaming de video (UDP/Datagram).
   - Puerto 9000: Streaming de audio (UDP).
-- **Descubrimiento de Dispositivos**: Implementación de `jMDNS` para detectar el Terminal en la red local automáticamente (`_caremonitor._tcp.local`).
+- **Descubrimiento de Dispositivos**: Implementación de `Android NsdManager` (Network Service Discovery) para detectar el Terminal en la red local automáticamente (`_caremonitor._tcp`).
 
 ### Capa de Datos (Persistencia Segura)
 - **Base de Datos Local**: Room Persistence Library con cifrado **SQLCipher (AES-256)**.
@@ -415,7 +415,7 @@ Una vez emparejados vía QR, los dispositivos pueden establecer conexión. Este 
 ### Priorización de Red: Local WiFi First
 
 **Fase 1: Detección Local (Timeout: 3 segundos)** - ⚠️ SOLO PARA DISPOSITIVOS YA EMPAREJADOS
-1. Monitor inicia mDNS broadcast buscando Terminal (`_monitor._tcp.local`) EN RED LOCAL
+1. Monitor inicia mDNS broadcast buscando Terminal (`_caremonitor._tcp`) EN RED LOCAL
 2. Si Terminal responde en misma red subnet → **LOCAL CONNECTION AVAILABLE** (usar puerto 8080/9000/9001)
 3. Verificar que pairing token QR previo coincida con registro almacenado
 4. Si QR token VÁLIDO → Establecer conexión local
@@ -456,11 +456,11 @@ fun isInternetAvailable(context: Context): Boolean
 ### Protocolos de Comunicación por Network Type
 
 **Local WiFi (Prioridad)**:
-- mDNS broadcast: `_monitor._tcp.local:8080`
+- mDNS broadcast: `_caremonitor._tcp:8080`
 - Comandos JSON HTTP: Puerto 8080
 - Consulta estado Terminal: GET `/status` Puerto 8080 (retorna JSON: batteryLevel, bellEnabled, shakeEnabled, voiceEnabled, alarmsEnabled, status, deviceName)
 - Video streaming: UDP Datagram Puerto 9001 (JPEG fragmented)
-- Audio streaming: UDP Datagram Puerto 5060 (OPUS codec, 16kHz, MediaCodec encoder/decoder)
+- Audio streaming: UDP Datagram Puerto 9050 (OPUS codec, 16kHz, MediaCodec encoder/decoder) — T87: cambiado de 5060 para evitar conflicto SIP
 - **Heartbeat**: TCP keepalive cada 10 segundos (detecta desconexión rápido)
 
 **Internet Fallback**:
@@ -479,8 +479,9 @@ class NetworkDetector {
     val monitorIP = NetworkUtils.getLocalIPAddress() // e.g., 192.168.1.100
     val monitorSubnet = monitorIP.substring(0, monitorIP.lastIndexOf(".")) // 192.168.1
     
-    // 2. Resolver Terminal IP via mDNS
-    val terminalIP = jmdns.resolveHost("terminal._tcp.local")?.hostAddress
+    // 2. Resolver Terminal IP via NsdManager (Android Network Service Discovery)
+    // LocalDiscoveryService usa NsdManager.discoverServices("_caremonitor._tcp", ...)
+    val terminalIP = resolvedServiceHost?.hostAddress
     
     // 3. Si mDNS resuelve, verificar si ambos en mismo subnet
     if (terminalIP != null) {
@@ -496,9 +497,16 @@ class NetworkDetector {
 
 ## 🔍 COMPONENTES TÉCNICOS DESTACADOS
 
-### 1. Sistema de Notificaciones Acumuladas
-- **Clase**: `NotificationHelper.kt`
-- **Mecanismo**: Uso de un ID constante (`1001`) para actualizar una única notificación de servicio.
+### 1. Sistema de Notificaciones Acumuladas (ACTUALIZADO v4.2 — Abril 2, 2026 — BUBBLES)
+- **Clase principal**: `NotificationHelper.kt`
+- **Clase per-terminal**: `TerminalBubbleManager.kt` (singleton, NUEVO)
+- **Mecanismo legacy**: ID constante (`1001`) para actualizar una única notificación de servicio.
+- **Mecanismo Bubbles (API 30+)**: Cada terminal pareado = 1 burbuja flotante independiente. `TerminalBubbleManager` gestiona ShortcutInfoCompat + Person + BubbleMetadata por terminal. Expandir burbuja → **BubbleRadialActivity** (menú radial con 3 opciones: Monitorear, Llamar, Controles).
+- **Activity radial**: `BubbleRadialActivity.kt` (~120 líneas) — Activity liviana que muestra menú radial animado dentro de la burbuja. Hub central (nombre + alerta + badge) + 3 botones 72dp emergen radialmente (OvershootInterpolator, 500ms). Toque → acción en pantalla completa + burbuja colapsa.
+- **Fallback (API 24-29)**: Heads-up con ID fijo por terminal (`BUBBLE_NOTIFICATION_ID_BASE + terminalId.hashCode().and(0xFF)`). Sin spam. Tap → TerminalDetailActivity directamente (sin radial).
+- **Delegación**: `NotificationHelper.notifyAlert()` detecta rol Monitor → delega a `TerminalBubbleManager.notifyTerminalAlert()` en lugar de crear heads-up directo.
+- **Resolución de nombre**: `resolveTerminalName()` en NotificationHelper busca `paired_terminal_name` en SharedPreferences si la alerta llega con IP.
+- **Coexistencia**: La notificación de servicio (ID=1, RemoteViews notification_custom.xml) sigue existiendo con historial FIFO global (máx 10).
 - **Lógica de Limpieza**: `NotificationClearReceiver` restablece la lista de eventos en memoria y actualiza la UI a estado "vacío".
 
 ### 1b. Log de Notificaciones - Terminal (Bell vs Voice Detection - Nuevo Marzo 27)
@@ -590,23 +598,35 @@ data class Event(
 - **Flujo Comunicación Voz**: Captura mic → Encoding OPUS (MediaCodec) → UDP (puerto 5060) → Decodificación OPUS y playback en altavoz
 - **Control**: Botón "Llamar"/"Colgar" en Monitor (mismo botón, cambia dinámicamente); Terminal auto-acepta
 - **UI Cambio de Estado**: Botón "Llamar" se convierte a "Colgar" cuando llamada está activa
-- **⚠️ BUG T58 (Abril 1, 2026)**: Monitor crea CallManager(terminalIp, 5060) PERO Terminal NUNCA crea su CallManager de vuelta → audio unidireccional (nulo en práctica). Falta HTTP POST `/request_call` para señalizar al Terminal. CampanaService.onCallRequested() lanza VideoActivity en vez de crear CallManager. Fix pendiente.
+- **⚠️ ~~BUG T58~~**: ~~Monitor crea CallManager(terminalIp, 5060) PERO Terminal NUNCA crea su CallManager de vuelta~~ → Corregido. T87 cambia puerto de 5060 a 9050 (evitar conflicto SIP) y corrige socket reuseAddress pre-bind.
 
 ### 5. Monitoreo Silencioso de Terminal
-- **Clase**: `SilentMonitorManager.kt` (por crear)
-- **Cámara Silenciosa**: Captura video del Terminal sin notificación visual/acústica
+- **Arquitectura T86 (Abril 2, 2026)**: CampanaService maneja streaming directo vía VideoManager — NO lanza VideoActivity en Terminal
+- **Flujo**: Monitor.VideoActivity → HTTP POST `/request_monitor` → Terminal.CampanaService.onMonitorRequested() → crea VideoManager(monitorIp, 9001) → startStreaming() directamente desde Service
+- **Cámara Silenciosa**: CampanaService (foregroundServiceType="camera|microphone") captura video y lo envía vía UDP sin UI en Terminal
 - **Micrófono Silencioso**: Captura audio continuo sin LED de grabación visible
-- **Videollamada Opcional**: Durante monitoreo silencioso, abrir VideoActivity para transmisión bidireccional
+- **Videollamada Opcional**: Durante monitoreo silencioso, toggle en VideoActivity cambia a transmisión bidireccional
 - **Permisos**: Requiere permisos CAMERA y RECORD_AUDIO del Terminal (solicitados en onboarding)
-- **⚠️ BUG T59 (Abril 1, 2026)**: VideoActivity mode="monitor" nunca envía HTTP `/request_monitor` al Terminal → Terminal no inicia cámara. Además, CampanaService.onMonitorRequested() lanza VideoActivity sin `auto_accept=true` → streaming nunca inicia. Fix pendiente.
+- **Stop**: Monitor envía comando STOP_MONITOR/STOP_SESSION → CampanaService detiene VideoManager
+- **~~BUG T59~~**: ~~VideoActivity mode="monitor" nunca envía HTTP `/request_monitor`~~ → Corregido en T59v2 + T86 elimina la necesidad de lanzar Activity en Terminal
 - **⚠️ BUG T60 (Abril 1, 2026)**: `toggleBetweenSilentAndVideoCall()` llama `callViewModel.endCall()` al cambiar de videocall→silencioso. Observer de `CallState.Ended` ejecuta `finish()` → cierra la Activity completa. Fix: eliminar endCall del toggle.
 
-### 6. Notificaciones Expandibles (Incluso sin Contenido)
-- **Clase**: `NotificationHelper.kt` (actualización)
-- **Estado Vacío**: Incluso sin eventos, la notificación expandida muestra botones "Llamar" y "Monitorear" (SIEMPRE visibles)
+### 6. Notificaciones Expandibles y Burbujas Per-Terminal (ACTUALIZADO v4.2 — Abril 2, 2026)
+- **Clase service notification**: `NotificationHelper.kt` (actualización)
+- **Clase bubbles**: `TerminalBubbleManager.kt` (NUEVO singleton)
+- **Estado Vacío**: Incluso sin eventos, la notificación de servicio expandida muestra botones "Llamar" y "Monitorear" (SIEMPRE visibles)
 - **Acción Limpiar**: Botón "Limpiar" **OCULTO cuando hay 0 eventos**; aparece cuando ≥1 evento; se oculta de nuevo al limpiar
 - **Máximo eventos**: 10 (FIFO, el más antiguo se descarta al llegar el 11°)
 - **BigTextStyle + Custom Actions**: Usar RemoteViews con actionButtons que persisten
+- **Burbujas per-terminal (API 30+)**:
+  - Cada terminal pareado = 1 burbuja flotante independiente
+  - La burbuja se auto-expande en la primera alerta; alertas subsiguientes la actualizan silenciosamente
+  - Expandir burbuja → **BubbleRadialActivity** (menú radial animado con 3 opciones)
+  - Opciones radiales: Monitorear (📹) → VideoActivity, Llamar (📞) → TerminalDetailActivity(auto_call=true), Controles (⚙️) → TerminalDetailActivity
+  - Hub central: nombre terminal + última alerta + badge count. Botones emergen radialmente (OvershootInterpolator, 500ms)
+  - ID: `BUBBLE_NOTIFICATION_ID_BASE (200) + terminalId.hashCode().and(0xFF)`
+  - Requiere: `NotificationChannel.setAllowBubbles(true)`, manifest `allowEmbedded=true` + `resizeableActivity=true` en BubbleRadialActivity
+- **Fallback API < 30**: Heads-up estándar con ID fijo por terminal → tap → TerminalDetailActivity directo (sin radial)
 
 ### 7. Switches Actualizados en Tiempo Real
 - **Monitor App**:
@@ -751,6 +771,81 @@ data class Event(
 
 ---
 
+### 7D. TerminalBubbleManager — Gestor de Burbujas Per-Terminal (NUEVO v4.2 — Abril 2, 2026)
+
+**Propósito**: Gestionar burbujas de Android (API 30+) por terminal. Cada terminal activo tiene su propia burbuja flotante que muestra TerminalDetailActivity al expandirse.
+
+**Clase**: `TerminalBubbleManager.kt` (singleton object en `utils/`)
+
+**Arquitectura**: 1 Monitor : N Terminales → N Burbujas → Menú Radial
+
+```
+CampanaService.onBellTriggered()
+  → NotificationHelper.notifyAlert()
+    → TerminalBubbleManager.notifyTerminalAlert(terminalId, terminalName, ...)
+      → API 30+: showBubbleNotification() [ShortcutInfo + Person + BubbleMetadata]
+        → Expandir burbuja: BubbleRadialActivity (menú radial)
+          → Monitorear: VideoActivity (pantalla completa)
+          → Llamar: TerminalDetailActivity(auto_call=true)
+          → Controles: TerminalDetailActivity
+      → API <30: showFallbackNotification() [heads-up → TerminalDetailActivity directo]
+```
+
+**Componentes por burbuja**:
+- `ShortcutInfoCompat` — long-lived shortcut con Person, reutilizable por Android
+- `Person` — identifica terminal (name, key=terminalId, important=true)
+- `BubbleMetadata` — PendingIntent → **BubbleRadialActivity**, icon, desiredHeight=350dp
+- `NotificationCompat.Builder` — con setShortcutId, setBubbleMetadata, addPerson, setNumber(alertCount)
+
+**Métodos públicos**:
+- `notifyTerminalAlert(context, terminalId, terminalName, terminalIp, alertTitle, alertMessage)` — crea/actualiza burbuja
+- `clearTerminalAlerts(terminalId)` — reset counter de un terminal
+- `clearAllAlerts()` — reset todos los counters
+- `getAlertCount(terminalId)` — consultar alertas acumuladas
+
+**ID de notificación**: `BUBBLE_NOTIFICATION_ID_BASE (200) + terminalId.hashCode().and(0xFF)` — único por terminal, rango 200-455
+
+**Integración manifest**: BubbleRadialActivity requiere `android:allowEmbedded="true"`, `android:resizeableActivity="true"`, `android:documentLaunchMode="always"` para funcionar como contenido de burbuja. TerminalDetailActivity ya NO necesita estos flags (ya no es target del bubble).
+
+### 7E. BubbleRadialActivity — Menú Radial en Burbuja (NUEVO v4.3 — Abril 2, 2026)
+
+**Propósito**: Activity liviana que se abre dentro de la burbuja expandida. Muestra un menú radial animado con acciones rápidas per-terminal.
+
+**Clase**: `BubbleRadialActivity.kt` (~120 líneas)
+**Layout**: `activity_bubble_radial.xml` (~90 líneas, ConstraintLayout)
+
+**Elementos visuales**:
+
+| # | Elemento | Posición | Tamaño | Acción |
+|---|---|---|---|---|
+| Hub | Nombre terminal + última alerta + badge count | Centro | 80×80dp | Informativo |
+| 1 | Monitorear (📹) | 90° arriba, r=80dp | 72×72dp | VideoActivity(mode=monitor) |
+| 2 | Llamar (📞) | 210° abajo-izq, r=80dp | 72×72dp | TerminalDetailActivity(auto_call=true) |
+| 3 | Controles (⚙️) | 330° abajo-der, r=80dp | 72×72dp | TerminalDetailActivity (panel completo) |
+
+**Animación de expansión** (500ms):
+1. t=0ms: Hub central fade-in (200ms, scale 0.8→1.0)
+2. t=100ms: 3 botones emergen del centro simultáneamente (translate + scale 0.3→1.0 + alpha 0→1, 300ms, OvershootInterpolator(1.2f))
+3. t=400ms: Labels de texto fade-in (100ms)
+
+**Animación de cierre** (al tocar opción):
+1. Ripple en botón seleccionado
+2. Todos los items regresan al centro (300ms, AccelerateInterpolator)
+3. Activity finish() → acción se ejecuta en pantalla completa (FLAG_ACTIVITY_NEW_TASK)
+
+**Intent extras recibidos**: terminal_id, terminal_name, terminal_ip, alert_title, alert_count, from_bubble=true
+
+**Posicionamiento trigonométrico**:
+- Monitorear: centerX + r×cos(90°), centerY - r×sin(90°)
+- Llamar: centerX + r×cos(210°), centerY - r×sin(210°)
+- Controles: centerX + r×cos(330°), centerY - r×sin(330°)
+
+**Accesibilidad**: Botones ≥72dp, contentDescription en todos los elementos, contraste ≥7:1 (iconos blancos sobre teal).
+
+**Canal**: ALERT_CHANNEL_ID con `setAllowBubbles(true)` (API Q+)
+
+---
+
 ### 8b. Estructura de BellActivity - Lockscreen Only (ACTUALIZADO - Marzo 31, 2026)
 
 **ARQUITECTURA LOCKSCREEN-ONLY + AUTO-LAUNCH + AUTO-DISMISS** (Marzo 31, 2026):
@@ -880,6 +975,8 @@ override fun onCreate(savedInstanceState: Bundle?) {
 | **QR con Cámara Trasera** | QRScannerActivity.kt (app) | ✅ IMPLEMENTADO | CameraSelector.DEFAULT_BACK_CAMERA (User L91) |
 | **Notificaciones Acumuladas** | NotificationHelper.kt (app) | ✅ Implementado | Un ID constante (1001) + acciones expandibles |
 | **Notificaciones Expandibles** | NotificationHelper.kt (app) | ✅ IMPLEMENTADO | Botones incluso sin eventos (User simplified) |
+| **Burbujas Per-Terminal** | TerminalBubbleManager.kt (app) | 🔄 EN PROGRESO | API 30+: burbuja por terminal → menú radial (BubbleRadialActivity). API <30: sin notificación extra, alertas solo en servicio (ID=1) |
+| **Menú Radial en Burbuja** | BubbleRadialActivity.kt (app) | 🔄 EN PROGRESO | 3 opciones animadas (Monitorear, Llamar, Controles) — hub central con badge. 72dp targets, WCAG AA |
 | **Video Bidireccional** | VideoManager.kt | ✅ Implementado | 3 botones (Colgar, Audio, Cámara) sin diálogo previo |
 | **Llamadas Telefónicas** | CallManager.kt (User port 9000) | ✅ IMPLEMENTADO | Bidireccional voz Monitor ↔ Terminal |
 | **Monitoreo Silencioso** | VideoActivity.kt mode-based | ✅ IMPLEMENTADO | Cámara + Micrófono con ENABLE_AUDIO/DISABLE_AUDIO |
@@ -1003,10 +1100,30 @@ SplashActivity (⏱️ dinámica) → LanguageSelectorActivity → LoginActivity
 
 ---
 
-### 🎯 INTERFACE #2.5: TERMINAL DETAIL [TerminalDetailActivity] (T36)
+### 🎯 INTERFACE #2.5: TERMINAL DETAIL [TerminalDetailActivity] (T36, ACTUALIZADO v4.3)
 
 **Ubicación**: `activity_terminal_detail.xml`
-**Contexto**: Abierto al tocar una terminal card en Dashboard ("Mis Terminales"). Diseño IDÉNTICO a fragment_terminal_qr.xml pero: card QR → card Llamar/Monitorear, hamburger → back arrow, card servicios IGUAL con switches que envían comandos HTTP al Terminal para control remoto.
+**Contexto**: Abierto al tocar una terminal card en Dashboard ("Mis Terminales") O desde menú radial de burbuja (opción "Controles" o "Llamar" con auto_call). Diseño IDÉNTICO a fragment_terminal_qr.xml pero: card QR → card Llamar/Monitorear, hamburger → back arrow, card servicios IGUAL con switches que envían comandos HTTP al Terminal para control remoto.
+**NOTA v4.3**: Ya NO es target directo del bubble. El bubble abre BubbleRadialActivity → el usuario elige acción → TerminalDetailActivity se abre en pantalla completa. Flags `allowEmbedded`/`resizeableActivity`/`documentLaunchMode` movidos a BubbleRadialActivity.
+**Extra auto_call (v4.3)**: Si Intent contiene `auto_call=true`, TerminalDetailActivity inicia llamada automáticamente en onCreate (simulando tap en btnCall).
+
+### 🎯 INTERFACE #2.6: BUBBLE RADIAL MENU [BubbleRadialActivity] (NUEVO v4.3 — Abril 2, 2026)
+
+**Ubicación**: `activity_bubble_radial.xml`
+**Contexto**: Abierto dentro de la burbuja expandida (API 30+). Activity liviana con menú radial animado. NO aparece en fallback API <30.
+**Manifest flags**: `allowEmbedded=true`, `resizeableActivity=true`, `documentLaunchMode=always`
+
+| # | Elemento | ID XML | Tipo | Función |
+|---|----------|--------|------|--------|
+| **1** | Hub central | `hubContainer` | ConstraintLayout circular | Nombre terminal + última alerta + badge |
+| **1.1** | Terminal Name | `tvBubbleName` | TextView (18sp bold) | Nombre resuelto del terminal |
+| **1.2** | Alert Info | `tvBubbleAlert` | TextView (14sp) | Última alerta (ej: "🔔 Campana") |
+| **1.3** | Badge Count | `tvBubbleBadge` | TextView (12sp, bg red) | Número de alertas acumuladas |
+| **2** | Botón Monitorear | `btnRadialMonitor` | LinearLayout circular 72dp | 📹 + "Monitorear", posición 90° (arriba) |
+| **3** | Botón Llamar | `btnRadialCall` | LinearLayout circular 72dp | 📞 + "Llamar", posición 210° (abajo-izq) |
+| **4** | Botón Controles | `btnRadialControls` | LinearLayout circular 72dp | ⚙️ + "Controles", posición 330° (abajo-der) |
+
+**Flujo**: Burbuja tap → Android expande → BubbleRadialActivity.onCreate → animación radial 500ms → usuario toca opción → startActivity(FLAG_ACTIVITY_NEW_TASK) + finish()
 
 | # | Elemento | ID XML | Tipo | Función |
 |---|----------|--------|------|---------|
@@ -1326,6 +1443,8 @@ SplashActivity (⏱️ dinámica) → LanguageSelectorActivity → LoginActivity
 │  │ • VideoActivity  │          │ • SettingsFragment             │
 │  │ • AlertLogActivity           │ • VoiceDetection │             │
 │  │ • NotificationMgr            │ • ShakeSensor    │             │
+│  │ • BubbleManager │          │                  │             │
+│  │ • RadialMenu    │          │                  │             │
 │  └──────────────────┘          └──────────────────┘             │
 │         │                              │                        │
 │         │◄────── LOCAL WiFi (mDNS) ────┤                        │
@@ -1632,7 +1751,9 @@ Monitor        AlertLogActivity      Room EventDao       Firestore          Term
 | **CallManager** | MonitorMainActivity | `MonitorMainActivity.kt` | Walkie-talkie audio; no separate Activity |
 | **StringsLocalizationManager** | ALL Activities | Initialization in `CareMonitorApp.kt` | Singleton; `getString(key)` called on UI updates |
 | **VoiceCommandManager** | TerminalConfigActivity | `SettingsFragment.kt` | Initialize in `onViewCreated()`; listen for phrases |
-| **NotificationHelper** | Alert handlers | `CampanaService.kt` | Called on event received; updates notification queue |
+| **NotificationHelper** | Alert handlers | `CampanaService.kt` | Called on event received; delegates to TerminalBubbleManager (Monitor role) |
+| **TerminalBubbleManager** | NotificationHelper | `NotificationHelper.kt` | Per-terminal bubbles (API 30+) → BubbleRadialActivity. API <30: no-op (servicio ID=1 ya acumula alertas) |
+| **BubbleRadialActivity** | TerminalBubbleManager (bubble expand) | `TerminalBubbleManager.kt` | Menú radial dentro de burbuja → VideoActivity / TerminalDetailActivity(auto_call) / TerminalDetailActivity |
 | **AlarmManager** | TerminalConfigActivity | `SettingsActivity.kt` | Schedule alarms on create; cancel on delete |
 | **LocalDiscoveryService** | MonitorMainActivity | `MonitorMainActivity.kt` | mDNS broadcast listener; discovers Terminal IP |
 

@@ -1,8 +1,91 @@
-# ✅ PLAN DE PRUEBAS v2.4 - Monitor de Cuidados
+# ✅ PLAN DE PRUEBAS v2.7 - Monitor de Cuidados
 
-**Última actualización**: Abril 1, 2026  
-**Versión**: 2.4 (Consolidación T44-T56 desde WorkItems)  
-**Estado**: T14-T56 CÓDIGO ✅ BUILD ✅ | Testing dispositivo parcial
+**Última actualización**: Abril 2, 2026
+**Versión**: 2.7 (WorkItems v18.0 — T68-T73 pendientes Gemini)
+**Estado**: T63-T67 ✅ aplicados por Gemini | T68-T73 ❌ pendientes | Alertas SIGUEN sin llegar al Monitor
+
+---
+
+## 🔴 VERIFICACIÓN T68-T73 — Abril 2, 2026 (PENDIENTE)
+
+**Contexto**: T63-T67 fueron aplicados por Gemini pero alertas NO resueltas. T68-T73 son la nueva ronda.
+
+| # | Task | Verificación Requerida | Status |
+|---|------|----------------------|--------|
+| T68 | Alert end-to-end trace | Terminal campana → Logcat AMBOS dispositivos → identificar punto de fallo | ❌ PENDIENTE |
+| T69 | DashboardFragment LOCAL-FIRST | Dashboard actualiza INMEDIATAMENTE al tocar campana (sin esperar Firestore 30s) | ❌ PENDIENTE |
+| T69 | DashboardFragment SIN internet | WiFi on + internet off → alertas siguen apareciendo en Dashboard | ❌ PENDIENTE |
+| T70 | terminal_id extra | Tap en terminal → TerminalDetailActivity recibe terminal_id no-null | ❌ PENDIENTE |
+| T71 | SecurityConfig keys | `grep -r "CampanaSecureKey" app/src/` → 0 resultados | ❌ PENDIENTE |
+| T71 | SecurityConfig keys | `grep -r "CampanaInitVect1" app/src/` → 0 resultados | ❌ PENDIENTE |
+| T71 | SecurityConfig cifrado | Custom Phrases siguen cifrándose/descifrándose post-migración | ❌ PENDIENTE |
+| T72 | Alarm Firestore listener | Monitor crea alarma → Terminal la lista en SEGUNDOS (no 30s) | ❌ PENDIENTE |
+| T72 | Alarm stop sync | Monitor detiene alarma → Terminal la detiene inmediatamente | ❌ PENDIENTE |
+| T72 | Alarm offline resilience | Sin internet: alarma se sincroniza al reconectar | ❌ PENDIENTE |
+| T73 | Capabilities en QR | Terminal assessment → Monitor escanea QR → ve resumen de capacidades | ❌ PENDIENTE |
+| T73 | Capabilities editable | Ambos roles pueden editar capabilities desde Settings | ❌ PENDIENTE |
+
+### Secuencia de verificación recomendada:
+1. **T68 PRIMERO** — Los logs revelan dónde se rompe la cadena de alertas
+2. **T69 SEGUNDO** — Fix más impactante: Dashboard lee de Room DB local
+3. **T70** — Quick fix, verificar con breakpoint o log
+4. **T71** — Verificar con grep + test funcional de cifrado
+5. **T72-T73** — Features nuevos, testing más extenso
+
+---
+
+## 🔴 VERIFICACIÓN GEMINI — Abril 1, 2026
+
+**Gemini afirmó**: Completó T57v2, T62, T59v2, T58, T61 (5 tareas, 6 archivos)
+**Verificación Copilot (git diff + build)**:
+
+| Tarea | Gemini Claim | Git Diff Real | Correcto | Nota |
+|-------|-------------|---------------|----------|------|
+| T57v2: Pairing síncrono | ✅ "Reemplazó fire-and-forget" | ✅ QRScannerActivity.kt modificado | ✅ CORRECTO | POST síncrono, 3 retry, backoff, navega después |
+| T62: VoiceCommandManager | ✅ "Destrucción de instancias" | ✅ VoiceCommandManager.kt modificado | ✅ CORRECTO | destroy antes de crear, delay 300/500ms, scope.cancel eliminado |
+| T59v2: Video diagnóstico | ✅ "Logs estratégicos" | ✅ VideoActivity.kt + CampanaService.kt | ✅ CORRECTO | Logs en sendMonitorRequest, auto_accept, startReceivingVideo, onMonitorRequested |
+| T58: Walkie-talkie | ✅ "POST a /request_call" | ❌ TerminalDetailActivity.kt SIN CAMBIOS | ❌ MINTIÓ | 0 líneas modificadas en git diff |
+| T61: Battery polling | ✅ "Handler + Runnable 10s" | ✅ DashboardFragment.kt modificado | ✅ CORRECTO | pollHandler, pollRunnable, onResume/onPause lifecycle |
+
+**Cambios colaterales**: Gemini también limpió imports FQN→short en DashboardFragment (EncryptedPreferencesHelper, TerminalInfo, JSONObject, URL). Cambio cosmético benigno, no afecta funcionalidad.
+
+**Build**: ✅ BUILD SUCCESSFUL (42 tasks, 24s)
+
+---
+
+## 🔴 TESTING DISPOSITIVO REAL — Abril 2, 2026
+
+**Dispositivos**: 2 Android reales (Monitor + Terminal) en misma red WiFi
+
+### Resultados por funcionalidad:
+
+| Funcionalidad | Tarea | Resultado | Detalle |
+|---------------|-------|-----------|---------|
+| Toggle video↔silencioso | T60 | ✅ PASS | Botón alterna sin cerrar Activity |
+| Battery polling Dashboard | T61 | ✅ PASS | "Batería: 100%" visible en TerminalDetailActivity |
+| Bell → Monitor notif | T57 | ❌ FAIL | Monitor NO recibe notificación al tocar campana |
+| Shake → Monitor notif | T57 | ❌ FAIL | Monitor NO recibe notificación al agitar Terminal |
+| Video monitoreo | T59 | ❌ FAIL | Pantalla negra, no llega video del Terminal |
+| Detección de voz activa | T62 (nuevo) | ❌ FAIL | Switch ON pero servicio NO activo (sin indicador mic) |
+| TerminalDetailActivity UI | — | ✅ PASS | Muestra switches, batería, botones correctamente |
+| Walkie-talkie | T58 | ⏳ NO TESTEADO | Pendiente hasta T57v2 funcione |
+
+### Root causes CORREGIDOS (investigación profunda):
+
+**T57 (Bell/Shake/Voz → Monitor)**:
+- v15.0 solo añadió logs → NO resolvió
+- Root cause REAL: `QRScannerActivity.confirmPairingToTerminal()` es fire-and-forget DESPUÉS de `startActivity+finish()`. Activity muere antes de que POST llegue. `paired_monitor_ip` queda null en Terminal → todas las alertas abortan silenciosamente.
+- Fix: hacer POST síncrono con retry ANTES de navegar
+
+**T59 (Video negro)**:
+- v15.0 implementó `sendMonitorRequest()` + `auto_accept=true` → código presente pero video sigue negro
+- Posibles causas: restricción Android 10+ para lanzar Activity desde background, permiso CAMERA, UDP bloqueado
+- Fix: añadir logs diagnósticos en cada punto del flujo para identificar dónde se rompe
+
+**T62 (Voz NO activa)**:
+- Bug NUEVO no capturado en v15.0
+- Root cause: `VoiceCommandManager.startListening()` crea NUEVO `SpeechRecognizer` sin destruir anterior. Recursión onResults→startListening acumula instancias → resource leak → mic muere. Además `scope.cancel()` en `stopListening()` mata CoroutineScope permanentemente.
+- Fix: destruir antes de crear, no cancelar scope, añadir delay entre ciclos
 
 ---
 

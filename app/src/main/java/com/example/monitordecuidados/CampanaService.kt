@@ -12,6 +12,7 @@ import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import com.example.monitordecuidados.communication.CampanaHttpServer
 import com.example.monitordecuidados.communication.CallManager
+import com.example.monitordecuidados.communication.VideoManager
 import com.example.monitordecuidados.communication.VoiceCommandManager
 import com.example.monitordecuidados.data.local.AppDatabase
 import com.example.monitordecuidados.data.local.Event
@@ -71,6 +72,7 @@ class CampanaService : Service(), SensorEventListener {
     private var accelerometer: Sensor? = null
     private var lastShakeTime: Long = 0
     private var isAudioCallActive = false
+    private var isMonitoringActive = false
     private var server: CampanaHttpServer? = null
     private var screenOffReceiver: BroadcastReceiver? = null
     private var voiceCommandManager: VoiceCommandManager? = null
@@ -79,6 +81,7 @@ class CampanaService : Service(), SensorEventListener {
 
     // T46: CallManager instance
     private var callManager: CallManager? = null
+    private var videoManager: VideoManager? = null
 
     // T53: Battery monitoring
     private var lastBatteryAlertState: String = "ok" // "ok" | "low"
@@ -92,31 +95,39 @@ class CampanaService : Service(), SensorEventListener {
 
     private val serverListener = object : CampanaHttpServer.OnServerEventListener {
         override fun onBellTriggered(sourceIp: String) {
+            // T80: Guardar terminal name para resolver nombre en burbujas
+            val prefs = getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE)
+            if (prefs.getString("paired_terminal_name", null) == null) {
+                prefs.edit().putString("paired_terminal_name", android.os.Build.MODEL).apply()
+            }
             NotificationHelper.notifyAlert(this@CampanaService, "🔔 Campana", "Se ha pedido ayuda desde Terminal", "bell", sourceIp)
+            // T69: DashboardFragment LOCAL-FIRST — leer alertas de Room DB
+            saveEventToLocalDb("bell", "Se ha pedido ayuda desde Terminal", sourceIp)
         }
         override fun onVoiceTriggered(text: String, sourceIp: String) {
             NotificationHelper.notifyAlert(this@CampanaService, "🎙️ Voz", text, "voice", sourceIp)
+            saveEventToLocalDb("voice", text, sourceIp)
         }
         
         // T58: Walkie-talkie side for Terminal
         override fun onCallRequested(sourceIp: String) {
             FileLogger.logInfo(TAG, "onCallRequested from $sourceIp — starting walkie-talkie")
             callManager?.stopCall()
-            callManager = CallManager(sourceIp, 5060)
+            callManager = CallManager(sourceIp, 9050)
             callManager?.startCall()
             isAudioCallActive = true
             updateNotification()
         }
         
-        // T59: Silent monitor request with auto-accept
+        // T86: Silent monitor — stream directly from Service (no Activity launch needed).
+        // Avoids Android 12+ background activity start restriction.
         override fun onMonitorRequested(sourceIp: String) {
-            val intent = Intent(this@CampanaService, VideoActivity::class.java).apply {
-                putExtra("mode", "monitor")
-                putExtra("remote_ip", sourceIp)
-                putExtra("auto_accept", true)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
+            FileLogger.logInfo(TAG, "T86: onMonitorRequested from $sourceIp — starting direct video streaming")
+            videoManager?.stopStreaming()
+            videoManager = VideoManager(this@CampanaService, sourceIp, 9001)
+            videoManager?.startStreaming()
+            isMonitoringActive = true
+            Log.d(TAG, "T86: VideoManager streaming to $sourceIp:9001")
         }
         
         override fun onCommandReceived(command: String, params: JSONObject) {
@@ -130,6 +141,13 @@ class CampanaService : Service(), SensorEventListener {
                 "SET_VOICE_OFF" -> prefs.edit().putBoolean("voice_detection_enabled", false).apply()
                 "SET_ALARMS_ON" -> prefs.edit().putBoolean("reminders_enabled", true).apply()
                 "SET_ALARMS_OFF" -> prefs.edit().putBoolean("reminders_enabled", false).apply()
+                // T86: Stop video monitoring from service
+                "STOP_MONITOR", "STOP_SESSION" -> {
+                    videoManager?.stopStreaming()
+                    videoManager = null
+                    isMonitoringActive = false
+                    Log.d(TAG, "T86: Video monitoring stopped via command $command")
+                }
                 // T58: Stop audio call command
                 "STOP_AUDIO_CALL" -> {
                     callManager?.stopCall()
@@ -144,7 +162,7 @@ class CampanaService : Service(), SensorEventListener {
             Handler(Looper.getMainLooper()).post { refreshServices() }
         }
 
-        // T57: Pairing diagnostics
+        // T57v2: Pairing diagnostics
         override fun onPairingConfirmed(sourceIp: String, monitorName: String) {
             FileLogger.logInfo(TAG, "onPairingConfirmed: sourceIp=$sourceIp, monitorName=$monitorName")
             getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE).edit()
@@ -158,6 +176,7 @@ class CampanaService : Service(), SensorEventListener {
         }
         override fun onShakeTriggered(sourceIp: String) {
             NotificationHelper.notifyAlert(this@CampanaService, "⚠️ Caída detectada", "Movimiento brusco en Terminal", "shake", sourceIp)
+            saveEventToLocalDb("shake", "Movimiento brusco en Terminal", sourceIp)
         }
 
         override fun onStatusRequested(): JSONObject {
@@ -174,6 +193,25 @@ class CampanaService : Service(), SensorEventListener {
                 put("alarmsEnabled", prefs.getBoolean("reminders_enabled", true))
                 put("status", "connected")
                 put("timestamp", System.currentTimeMillis())
+            }
+        }
+    }
+
+    private fun saveEventToLocalDb(type: String, message: String, sourceIp: String) {
+        serviceScope.launch {
+            try {
+                val db = AppDatabase.getDatabase(this@CampanaService)
+                val event = Event(
+                    timestamp = System.currentTimeMillis(),
+                    type = type,
+                    message = message,
+                    sourceIp = sourceIp,
+                    sourceTerminalName = "Terminal" // Podría mejorarse obteniendo el nombre del pairing
+                )
+                db.eventDao().insertEvent(event)
+                Log.d(TAG, "T69: Event $type saved to local DB on Monitor side")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving event to local DB", e)
             }
         }
     }
@@ -210,7 +248,8 @@ class CampanaService : Service(), SensorEventListener {
 
     private fun startHttpServer() {
         try {
-            server = CampanaHttpServer(8080, serverListener)
+            // T71: Pasando context para KeyStore
+            server = CampanaHttpServer(8080, this, serverListener)
             server?.start()
             Log.d(TAG, "HTTP Server started on port 8080")
         } catch (e: Exception) {
@@ -292,6 +331,13 @@ class CampanaService : Service(), SensorEventListener {
             return
         }
 
+        // T67: Verificar que SpeechRecognizer está disponible en el dispositivo
+        if (!android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
+            Log.w(TAG, "setupVoiceDetection: SpeechRecognizer not available on device, skipping")
+            prefs.edit().putBoolean("voice_detection_enabled", false).apply()
+            return
+        }
+
         voiceCommandManager = VoiceCommandManager(this, object : VoiceCommandManager.OnVoiceCommandListener {
             override fun onKeywordDetected(keyword: String) {
                 sendVoiceAlert(keyword)
@@ -365,16 +411,19 @@ class CampanaService : Service(), SensorEventListener {
                 Log.w(TAG, "sendShakeAlert: paired_monitor_ip is null, alert NOT sent to Monitor")
             }
             if (monitorIp != null) {
+                Log.d(TAG, "T68-TRACE: sending shake alert to Monitor at $monitorIp:8080/alert/shake")
                 Thread {
                     try {
                         val url = URL("http://$monitorIp:8080/alert/shake")
                         val connection = url.openConnection() as java.net.HttpURLConnection
                         connection.requestMethod = "POST"
                         connection.connectTimeout = 3000
+                        connection.setRequestProperty("Content-Type", "application/json")
                         connection.doOutput = true
-                        connection.outputStream.write("status=triggered".toByteArray())
+                        connection.outputStream.write(JSONObject().apply { put("type", "shake") }.toString().toByteArray())
                         val responseCode = connection.responseCode
                         FileLogger.logInfo(TAG, "Shake alert sent to $monitorIp, response: $responseCode")
+                        Log.d(TAG, "T68-TRACE: shake alert POST response=$responseCode")
                         connection.disconnect()
                     } catch (e: Exception) {
                         Log.e(TAG, "Error sending shake to Monitor", e)
@@ -394,17 +443,20 @@ class CampanaService : Service(), SensorEventListener {
                 Log.w(TAG, "sendVoiceAlert: paired_monitor_ip is null, alert NOT sent to Monitor")
             }
             if (monitorIp != null) {
+                Log.d(TAG, "T68-TRACE: sending voice alert to Monitor at $monitorIp:8080/trigger_voice")
                 Thread {
                     try {
                         val url = URL("http://$monitorIp:8080/trigger_voice")
                         val connection = url.openConnection() as java.net.HttpURLConnection
                         connection.requestMethod = "POST"
                         connection.connectTimeout = 3000
+                        connection.setRequestProperty("Content-Type", "application/json")
                         connection.doOutput = true
                         val json = JSONObject().apply { put("text", keyword) }
                         connection.outputStream.write(json.toString().toByteArray())
                         val responseCode = connection.responseCode
                         FileLogger.logInfo(TAG, "Voice alert sent to $monitorIp, response: $responseCode")
+                        Log.d(TAG, "T68-TRACE: voice alert POST response=$responseCode")
                         connection.disconnect()
                     } catch (e: Exception) {
                         Log.e(TAG, "Error sending voice alert to Monitor", e)
@@ -417,6 +469,14 @@ class CampanaService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // T66: Refrescar userRole por si cambió desde que el servicio inició
+        val prefs = getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE)
+        val freshRole = prefs.getString("user_role", ROLE_TERMINAL) ?: ROLE_TERMINAL
+        if (freshRole != userRole) {
+            Log.d(TAG, "T66: userRole changed from $userRole to $freshRole")
+            userRole = freshRole
+        }
+
         when (intent?.action) {
             "UPDATE_ALERTS" -> updateNotification()
             "REFRESH_SERVICES" -> refreshServices()
@@ -430,22 +490,30 @@ class CampanaService : Service(), SensorEventListener {
         val callAction = intent?.getStringExtra("call_action")
         
         if (action == ACTION_TRIGGER_BELL) {
+            Log.d(TAG, "T68-TRACE: ACTION_TRIGGER_BELL received, userRole=$userRole")
             val prefs = getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE)
             val monitorIp = prefs.getString("paired_monitor_ip", null)
             if (monitorIp == null) {
                 Log.w(TAG, "triggerBell: paired_monitor_ip is null, bell NOT sent to Monitor")
             }
             if (monitorIp != null) {
+                Log.d(TAG, "T68-TRACE: sending bell alert to Monitor at $monitorIp:8080/trigger_bell")
                 Thread {
                     try {
                         val url = URL("http://$monitorIp:8080/trigger_bell")
                         val connection = url.openConnection() as java.net.HttpURLConnection
                         connection.requestMethod = "POST"
                         connection.connectTimeout = 3000
+                        connection.setRequestProperty("Content-Type", "application/json")
                         connection.doOutput = true
-                        connection.outputStream.write("type=bell&source=terminal".toByteArray())
+                        val json = JSONObject().apply {
+                            put("type", "bell")
+                            put("source", "terminal")
+                        }
+                        connection.outputStream.write(json.toString().toByteArray())
                         val responseCode = connection.responseCode
                         FileLogger.logInfo(TAG, "Bell alert sent to $monitorIp, response: $responseCode")
+                        Log.d(TAG, "T68-TRACE: bell alert POST response=$responseCode")
                         connection.disconnect()
                     } catch (e: Exception) {
                         Log.e(TAG, "Error sending bell to Monitor", e)
@@ -465,9 +533,11 @@ class CampanaService : Service(), SensorEventListener {
     private fun startAudioCall() {
         isAudioCallActive = true
         updateNotification()
-        val monitorIp = EncryptedPreferencesHelper.getString(this, "paired_monitor_ip", "")
-        if (monitorIp?.isNotEmpty() == true) { // Fixed T46 build error
-            callManager = CallManager(monitorIp, 5060)
+        val monitorIp = getSharedPreferences("monitordecuidados_prefs", MODE_PRIVATE)
+            .getString("paired_monitor_ip", "") ?: ""
+        if (monitorIp.isNotEmpty()) { // Fixed T46 build error
+            // T87: Puerto 9050
+            callManager = CallManager(monitorIp, 9050)
             callManager?.startCall()
         }
     }
@@ -580,5 +650,8 @@ class CampanaService : Service(), SensorEventListener {
         NetworkUtils.unregisterNetworkCallback(this)
         // T46: End call
         callManager?.stopCall()
+        // T86: Cleanup video streaming
+        videoManager?.stopStreaming()
+        videoManager = null
     }
 }

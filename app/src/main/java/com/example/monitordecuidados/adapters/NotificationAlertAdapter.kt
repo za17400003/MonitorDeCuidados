@@ -6,14 +6,14 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.monitordecuidados.R
-import com.example.monitordecuidados.models.NotificationItem
+import com.example.monitordecuidados.data.local.Event
 import java.text.SimpleDateFormat
 import java.util.*
 
 class NotificationAlertAdapter : RecyclerView.Adapter<NotificationAlertAdapter.ViewHolder>() {
-    private var items = listOf<NotificationItem>()
+    private var items = listOf<Event>()
 
-    fun submitList(newItems: List<NotificationItem>) {
+    fun submitList(newItems: List<Event>) {
         items = newItems
         notifyDataSetChanged()
     }
@@ -27,9 +27,9 @@ class NotificationAlertAdapter : RecyclerView.Adapter<NotificationAlertAdapter.V
         val item = items[position]
         val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
-        holder.tvTerminalName?.text = item.title
-        holder.tvAlertMessage.text = item.body
-        holder.tvAlertTime.text = item.timestamp?.let { sdf.format(it.toDate()) } ?: ""
+        holder.tvTerminalName?.text = item.sourceTerminalName
+        holder.tvAlertMessage.text = item.message
+        holder.tvAlertTime.text = sdf.format(Date(item.timestamp))
     }
 
     override fun getItemCount() = items.size

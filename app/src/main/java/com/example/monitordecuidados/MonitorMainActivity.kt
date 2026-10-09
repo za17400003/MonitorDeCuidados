@@ -42,6 +42,9 @@ class MonitorMainActivity : AppCompatActivity() {
                 CampanaService.startService(this)
             }
 
+            // T63: Auto-heal pairing — asegurar que Terminal tiene nuestro IP
+            healPairingIfNeeded()
+
             setupUI()
             setupObservers()
             
@@ -122,5 +125,40 @@ class MonitorMainActivity : AppCompatActivity() {
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragmentContainer, fragment)
             .commit()
+    }
+
+    /**
+     * T63: Si ya tenemos paired_terminal_ip, enviar /confirm_pairing al Terminal
+     * para asegurar que Terminal tiene nuestro paired_monitor_ip.
+     * Esto cura emparejamientos rotos del pairing viejo (fire-and-forget).
+     */
+    private fun healPairingIfNeeded() {
+        val terminalIp = com.example.monitordecuidados.utils.EncryptedPreferencesHelper
+            .getString(this, "paired_terminal_ip") ?: return
+        val myIp = com.example.monitordecuidados.utils.NetworkUtils.getLocalIpAddress() ?: return
+        val myName = android.os.Build.MODEL
+
+        Log.d(TAG, "T68-TRACE: healPairingIfNeeded called. terminalIp=$terminalIp, myIp=$myIp")
+
+        Thread {
+            try {
+                val url = java.net.URL("http://$terminalIp:8080/confirm_pairing")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 3000
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                val json = org.json.JSONObject().apply {
+                    put("monitorName", myName)
+                    put("monitorIp", myIp)
+                }
+                conn.outputStream.write(json.toString().toByteArray())
+                val code = conn.responseCode
+                conn.disconnect()
+                Log.d(TAG, "T63 pairing heal: sent to $terminalIp, response=$code")
+            } catch (e: Exception) {
+                Log.w(TAG, "T63 pairing heal failed (Terminal may be offline): ${e.message}")
+            }
+        }.start()
     }
 }

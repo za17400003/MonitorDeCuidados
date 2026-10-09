@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.monitordecuidados.CampanaService
 import com.example.monitordecuidados.MonitorMainActivity
@@ -24,7 +25,6 @@ object NotificationHelper {
     const val LOCKSCREEN_CHANNEL_ID = "lockscreen_bell"
     
     private val alertHistory = mutableListOf<AlertEvent>()
-    private var alertNotificationId = 100  // Incrementa para cada alerta nueva
 
     data class AlertEvent(
         val timestamp: Long = System.currentTimeMillis(),
@@ -45,6 +45,10 @@ object NotificationHelper {
             )
             manager.createNotificationChannel(serviceChannel)
 
+            // T83b: Eliminar canal existente para forzar recreación con allowBubbles=true.
+            // createNotificationChannel() NO actualiza allowBubbles en canales ya existentes.
+            manager.deleteNotificationChannel(ALERT_CHANNEL_ID)
+
             val alertChannel = NotificationChannel(
                 ALERT_CHANNEL_ID,
                 "Alertas de Cuidados",
@@ -54,6 +58,9 @@ object NotificationHelper {
                 enableLights(true)
                 enableVibration(true)
                 setShowBadge(true)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    setAllowBubbles(true)
+                }
             }
             manager.createNotificationChannel(alertChannel)
 
@@ -89,8 +96,11 @@ object NotificationHelper {
      * M9 Refactor: Adds to history and triggers service notification update.
      * T19: Added visible heads-up notification.
      * AUDIT FIX: Only show heads-up for Monitor role.
+     * T80: Delegate to BubbleManager for per-terminal bubbles.
      */
     fun notifyAlert(context: Context, title: String, message: String, type: String, terminalName: String = "") {
+        Log.d("NotificationHelper", "T68-TRACE: notifyAlert called, CampanaService.userRole=${CampanaService.userRole}, type=$type")
+
         if (message.isNotBlank()) {
             alertHistory.add(AlertEvent(
                 title = title,
@@ -104,32 +114,30 @@ object NotificationHelper {
         // Notify CampanaService to refresh its foreground notification
         CampanaService.updateServiceNotificationWithAlerts(context)
 
-        // Only show visible heads-up if we are in Monitor role
+        // Only show visible notification if we are in Monitor role
         if (CampanaService.userRole != CampanaService.ROLE_MONITOR) return
 
-        // Show visible heads-up notification for the user
-        val intent = Intent(context, MonitorMainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context, alertNotificationId, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        // T80: Delegate to BubbleManager — per-terminal bubbles on API 30+, fallback on older
+        val resolvedTerminalName = resolveTerminalName(context, terminalName)
+        val resolvedTerminalId = terminalName.ifBlank { "default_terminal" }
+        TerminalBubbleManager.notifyTerminalAlert(
+            context = context,
+            terminalId = resolvedTerminalId,
+            terminalName = resolvedTerminalName,
+            terminalIp = terminalName.takeIf { it.matches(Regex("\\d+\\.\\d+\\.\\d+\\.\\d+")) },
+            alertTitle = title,
+            alertMessage = message
         )
+    }
 
-        val notification = NotificationCompat.Builder(context, ALERT_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification_bell)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .build()
-
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(alertNotificationId++, notification)
-        if (alertNotificationId > 200) alertNotificationId = 100  // Reciclar IDs
+    private fun resolveTerminalName(context: Context, terminalNameOrIp: String): String {
+        if (terminalNameOrIp.isBlank()) return "Terminal"
+        if (terminalNameOrIp.matches(Regex("\\d+\\.\\d+\\.\\d+\\.\\d+"))) {
+            val prefs = context.getSharedPreferences("monitordecuidados_prefs", Context.MODE_PRIVATE)
+            val savedName = prefs.getString("paired_terminal_name", null)
+            return savedName ?: "Terminal ($terminalNameOrIp)"
+        }
+        return terminalNameOrIp
     }
 
     fun getAlertHistory() = alertHistory.toList()

@@ -1,8 +1,8 @@
 # 📋 ESPECIFICACIÓN FUNCIONAL v4.0 - Monitor de Cuidados
 
-**Última actualización**: Marzo 30, 2026  
-**Versión**: 4.0 (Rediseño UX/UI Geriátrico v2.0: Investigación de mercado + W3C WAI + Diseño Universal + GrandPad/GreatCall-inspired)  
-**Estado**: Documentación Completa - Rediseño Aprobado
+**Última actualización**: Abril 2, 2026
+**Versión**: 4.1 (Auditoría código↔docs: 23 discrepancias corregidas + arquitectura LOCAL-FIRST)
+**Estado**: Documentación Actualizada contra código real
 
 ---
 
@@ -63,12 +63,12 @@
 ### 4. **NotificationViewModel** (`NotificationViewModel.kt`)
 | Aspect | Details |
 |--------|---------|
-| **Purpose** | Real-time Firestore listener for `/notifications_history` collection + alert consolidation |
+| **Purpose** | Alert management: lee eventos de Room DB local (LOCAL-FIRST) + sincroniza con Firestore como backup |
 | **State Class** | `NotificationItem` (type: bell\|shake\|voice\|battery_low\|battery_ok, timestamp, sourceTerminal), `NotificationState` |
 | **Key Methods** | `observeRealtimeNotifications()`, `getNotifications(limit, offset)`, `markAsRead(notificationId)`, `clearOldNotifications(olderThanDays)` |
 | **LiveData** | `notificationList: LiveData<List<NotificationItem>>`, `unreadCount: LiveData<Int>` |
-| **Firestore Integration** | Listens to `/notifications_history/{userId}`, auto-syncs when Terminal app sends events |
-| **Integration** | MonitorMainActivity (notification cards), AlertLogActivity (historical view), NotificationHelper (alert dispatch) |
+| **Data Source (LOCAL-FIRST)** | Lee de Room DB tabla Event (fuente primaria). SyncManager sincroniza Event→Firestore `/notifications_history` cada 30s como backup. **NO depende de Firestore listener para UI en tiempo real.** |
+| **Integration** | DashboardFragment (alert cards desde Room), AlertLogActivity (historical view), NotificationHelper (alert dispatch) |
 | **Test File** | `CallManagerTest.kt` (notification queueing tested via CallManager integration) |
 
 ### 5. **PreferencesViewModel** (`PreferencesViewModel.kt`)
@@ -108,7 +108,7 @@
 | 5 | Audio Calls (walkie-talkie, NO UI needed) | ✅ YES | ⚠️ Partial | Walkie-talkie vía CallManager.kt - Sin interfaz visual, sin Activity separada |
 | 6 | Video Monitoring (Silent - video + audio) | ✅ YES | ⚠️ Partial | [VideoActivity.kt] - Needs mode flags for audio-only |
 | 7 | Video Calls (bidirectional) | ✅ YES | ⚠️ Partial | [VideoActivity.kt] - Missing Terminal auto-accept logic |
-| 8 | Notifications (accumulated, max 10 events) | ✅ YES | ✅ YES | [notification_custom.xml, NotificationHelper.kt] |
+| 8 | Notifications (accumulated, max 10 events, per-terminal Bubbles API 30+) | ✅ YES | ✅ YES | [notification_custom.xml, NotificationHelper.kt, TerminalBubbleManager.kt] |
 | 9 | Alert Log (historical notifications) | ✅ YES | ✅ YES | [AlertLogActivity.kt] |
 | 10 | Settings (shared Monitor/Terminal) | ✅ YES | ✅ YES | [SettingsActivity.kt] |
 | 11 | Role Selector/Switch | ✅ YES | ✅ YES | [RoleSelectorActivity.kt] + Menu |
@@ -187,6 +187,17 @@
 | **No Hardcoded Secrets** | All API keys in EncryptedSharedPreferences or Firebase Config | Code audit: grep for `key=` patterns |
 | **Privacy: No Tracking** | No location tracking, no device fingerprinting, no activity profiling beyond app logs | Design review: NSURLSession logging, Firestore queries should not identify users |
 
+> 🔴 **ALERTA CRÍTICA v4.1 — SEGURIDAD**: `SecurityConfig.kt` contiene claves AES HARDCODEADAS (`"CampanaSecureKey"` y `"CampanaInitVect1"`). Esto viola el requisito "No Hardcoded Secrets". Se requiere implementar derivación de claves real:
+> - **Reemplazar**: `SecurityConfig.AES_KEY` y `SecurityConfig.AES_IV` con claves derivadas via PBKDF2 o Android KeyStore
+> - **Opciones de key derivation**:
+>   1. `KeyStoreHelper` ya existe — usar para generar/almacenar claves AES en Android Keystore
+>   2. PBKDF2 con salt único derivado de Firebase UID del usuario
+>   3. Para comunicación HTTP local: Shared secret intercambiado via QR (campo `secret` del QR JSON) como input para PBKDF2
+> - **Eliminación**: `SecurityConfig.kt` no debe contener NINGÚN `SecretKeySpec` literal ni `IvParameterSpec` literal
+> - **IV**: Generar IV aleatorio por cada operación de cifrado (no reusar)
+> - **Afecta**: AES256EncryptionHelper, Room SQLCipher passphrase, Custom Phrases encriptación
+> - **Estado**: ❌ NO IMPLEMENTADO — requiere WorkItem dedicado
+
 ---
 
 ## 🎯 VISIÓN GENERAL
@@ -194,6 +205,29 @@
 Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y monitoreo de personas mayores, optimizada para accesibilidad extrema y simplicidad radical. 
 
 **Principio Rector (v2.0)**: "La calidad de la experiencia del usuario es el diferenciador #1". Basada en investigación de empresas exitosas en eldercare (GrandPad, GreatCall/Lively, Life360, Care.com), estándares W3C WAI para usuarios mayores, y 7 principios de Diseño Universal. El Terminal (dispositivo del adulto mayor) sigue el modelo "walled garden" de GrandPad — simplicidad extrema con máximo 3 acciones visibles. El Monitor (dispositivo del cuidador) sigue el modelo "dashboard inteligente" de Life360 — información de un vistazo con acciones de 1 tap.
+
+### 🏗️ PRINCIPIO ARQUITECTÓNICO: LOCAL-FIRST (NUEVO v4.1 — Abril 2, 2026)
+
+> **Decisión arquitectónica PERMANENTE**: La app DEBE funcionar perfectamente en red WiFi local sin internet. Firestore es almacenamiento secundario para cross-network y backup, NUNCA la fuente primaria de datos en tiempo real.
+
+**Jerarquía de datos**:
+1. **Room DB local** = fuente de verdad para operación en tiempo real (eventos, alarmas, frases)
+2. **HTTP local (WiFi)** = canal primario de comunicación Terminal↔Monitor (CampanaHttpServer puerto 8080)
+3. **Firestore** = almacenamiento persistente + sincronización cross-network + backup histórico
+
+**Reglas LOCAL-FIRST**:
+- **DashboardFragment** lee alertas desde Room DB local (tabla Event), NO desde Firestore `notifications_history`
+- **Alertas** llegan via HTTP POST local (Terminal→Monitor) y se guardan en Room DB inmediatamente
+- **Alarms** se guardan en Room DB primero, se sincronizan a Firestore via SyncManager (30s interval)
+- **Custom Phrases** se guardan en Room DB primero, sync a Firestore cuando hay conexión
+- **Si no hay internet**: La app funciona 100% en red local WiFi. Firestore queda pendiente (FirebaseSyncQueue)
+- **Si no hay WiFi local**: Firestore actúa como broker para comunicación cross-network
+
+**SyncManager** (implementación actual):
+- Auto-sync cada 30 segundos: Room DB → Firestore
+- Entidades sincronizadas: Event, Alarm, CustomPhrase
+- FirebaseSyncQueue encola operaciones cuando Firestore no está disponible
+- Al reconectar: despacha cola con timestamps originales
 
 ---
 
@@ -211,12 +245,16 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
   - **TabLayout dots**: drawable custom `tab_dot_selector.xml` (8dp círculos, teal activo, gris inactivo). OCULTO en pantalla de bienvenida (paso 1), visible en pasos con múltiples slides.
   - Ver sección "DISEÑO Y ACCESIBILIDAD v2.0 → ONBOARDING" para especificación completa
   - Control: flag `onboarding_completed` en SharedPreferences, reseteable desde Settings
-- **Evaluación de Capacidades** (CapabilitiesAssessmentActivity - OPCIONAL):
+- **Evaluación de Capacidades** (CapabilitiesAssessmentActivity - OPCIONAL, EXPANSIÓN v4.1):
   - Cuestionario post-login que evalúa 5 capacidades: audición, movilidad, cognición, habla, visión
   - Usuario puede presionar botón "OMITIR" para saltar la evaluación (56dp, gris, prominente)
-  - Si responde: Respuestas se guardan en Firestore → **NUEVO v2.0: Disparan UI Adaptativa** (ver sección correspondiente)
-  - Si omite: Se marca como "omitted" en Firestore + SharedPreferences y navega a Terminal ConfigActivity
+  - Si responde: Respuestas se guardan localmente (Room/SharedPreferences) + Firestore → **Disparan UI Adaptativa** (ver sección correspondiente)
+  - Si omite: Se marca como "omitted" y navega a TerminalMainActivity
   - Respuestas se usan para personalizar sensibilidad de reconocimiento de voz Y adaptar UI (tamaños, contraste, vibración)
+  - **NUEVO v4.1 — Info mostrada al Monitor al escanear QR**: Cuando Monitor escanea QR de Terminal, se le muestra resumen de capacidades del adulto mayor (si fueron completadas). El Monitor puede ver: nivel de audición, movilidad, cognición, habla, visión.
+  - **NUEVO v4.1 — Editable por ambos roles**: TANTO Monitor como Terminal pueden editar las capacidades en cualquier momento desde Settings.
+  - **NUEVO v4.1 — Sugerencias inteligentes de servicios**: Basado en las capacidades evaluadas, la app sugiere qué servicios activar. Ejemplo: si audición=baja → sugiere activar detección de agitación como alternativa a voz. Si movilidad=baja → sugiere activar shake con sensibilidad reducida.
+  - **NUEVO v4.1 — Almacenamiento dual**: Capacidades guardadas en Room DB local (operación offline) + sincronizadas a Firestore (cross-network)
 - **Selección de Rol**: Integrada en onboarding (paso 2). También accesible después desde Settings → "Cambiar Modo".
 
 ### 2️⃣ Monitor App (app/) - REDISEÑADO v2.0
@@ -228,8 +266,8 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 **Notificaciones Visibles de Alerta (NUEVO v2.4 — Marzo 31)**: Cuando Terminal envía alerta HTTP (campana/shake/voz) al Monitor, el Monitor DEBE mostrar una notificación heads-up visible con sonido y vibración usando ALERT_CHANNEL_ID (IMPORTANCE_HIGH). La notificación silenciosa del servicio foreground NO cuenta como alerta visible. Cada alerta genera una notificación independiente con ID incremental (100-200).
 
 - **Tab Inicio — Dashboard Inteligente**:
-  - **Alertas Activas** (prioridad #1, top): Cards con alertas no atendidas, botones LLAMAR y MONITOREAR inline por cada alerta
-  - **Mis Terminales** (prioridad #2): Estado de un vistazo de todos los terminales (nombre + conexión + batería). **DashboardFragment DEBE llamar `connectionViewModel.getPairingsList()` en `setupObservers()` Y en `onResume()`** para disparar la query Firestore. La llamada en `onResume()` actúa como retry si Firebase Auth no estaba restaurada en `onViewCreated()`. **ConnectionViewModel DEBE almacenar `ListenerRegistration`** del `addSnapshotListener` y remover el anterior antes de agregar uno nuevo (evitar listener accumulation). **`onCleared()` DEBE remover el listener.**
+  - **Alertas Activas (LOCAL-FIRST)** (prioridad #1, top): Cards con alertas no atendidas, botones LLAMAR y MONITOREAR inline por cada alerta. **DashboardFragment DEBE leer alertas desde Room DB local (tabla Event)**, NO desde Firestore `notifications_history`. Los eventos llegan vía HTTP local (Terminal→Monitor) y se guardan en Room inmediatamente. SyncManager sincroniza Room→Firestore como backup cada 30s.
+  - **Mis Terminales** (prioridad #2): Estado de un vistazo de todos los terminales (nombre + conexión + batería). Tap en terminal → abre TerminalDetailActivity (con extra `terminal_id`). **DashboardFragment DEBE llamar `connectionViewModel.getPairingsList()` en `setupObservers()` Y en `onResume()`** para disparar la query Firestore. La llamada en `onResume()` actúa como retry si Firebase Auth no estaba restaurada en `onViewCreated()`. **ConnectionViewModel DEBE almacenar `ListenerRegistration`** del `addSnapshotListener` y remover el anterior antes de agregar uno nuevo (evitar listener accumulation). **`onCleared()` DEBE remover el listener.**
   - **Vincular Terminal** (prioridad #3): Botón QR para emparejar nuevos dispositivos. **En el layout, el botón "Vincular Terminal" aparece ENCIMA de la lista de terminales** (orden: Header → Botón → Lista/Vacío).
 - **Vincular Terminal**: Escaneo de QR con cámara trasera para emparejamiento seguro. **PERMISO CAMERA REQUERIDO**: DashboardFragment DEBE verificar permiso `CAMERA` ANTES de lanzar `QRScannerActivity`. Si denegado permanentemente, guiar al usuario a Ajustes → Permisos. `addPairing()` DEBE completar escritura Firestore ANTES de navegar a MonitorMainActivity (evitar race condition).
 - **Llamadas Telefónicas**: Iniciar y colgar llamadas de voz bidireccionales con el Terminal.
@@ -301,11 +339,14 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 
 **Descripción**: Terminal monitorea continuamente el nivel de batería y notifica al Monitor cuando está por debajo del 15%.
 
-**Monitoreo en Terminal**:
+**Monitoreo en Terminal (LOCAL-FIRST + Firestore backup)**:
 - CampanaService registra `BatteryReceiver` (BroadcastReceiver) para acción `Intent.ACTION_BATTERY_CHANGED`
 - Se ejecuta cada vez que nivel cambia (no consume batería extra - es notificación del OS)
-- Cuando nivel ≤15%: Se llama `logBatteryLowToFirebase(batteryLevel)` para registrar en Firestore
-- Cuando nivel >20%: Se llama `logBatteryOkToFirebase()` para confirmar recuperación (hysteresis para evitar spam)
+- Cuando nivel ≤15%:
+  1. **HTTP local PRIMERO**: Envía HTTP POST a Monitor `/alert/battery_low` con JSON `{"level": N, "deviceName": "..."}` (igual que shake/bell)
+  2. **Firestore backup**: Llama `logBatteryLowToFirebase(batteryLevel)` para registrar en Firestore (cross-network + historial)
+  3. **Room DB local**: Guarda Event(type="battery_low") en Room DB del Terminal
+- Cuando nivel >20%: Envía HTTP POST `/alert/battery_ok` + `logBatteryOkToFirebase()` (hysteresis)
 
 **Evento Registrado en Firestore**:
 ```json
@@ -320,9 +361,10 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 }
 ```
 
-**Recepción en Monitor**:
-- NotificationViewModel observa `/notifications_history` en tiempo real con Firestore listener
-- Cuando evento `type: "battery_low"` se detecta:
+**Recepción en Monitor (LOCAL-FIRST)**:
+- **Vía HTTP local** (prioridad): CampanaHttpServer recibe POST `/alert/battery_low` → guarda Event en Room DB → NotificationHelper.notifyAlert() muestra heads-up
+- **Vía Firestore** (cross-network fallback): NotificationViewModel observa `/notifications_history` como fallback si Terminal no está en red local
+- Cuando evento `type: "battery_low"` se detecta (por cualquier vía):
   1. Crea notificación con ícono distintivo 🔋 (battery emoji)
   2. Título: "Batería Baja"
   3. Contenido: "[Terminal Name] - [15%]"
@@ -362,11 +404,13 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 - Guarda en Base Local (Room) + sincronizado a Firestore
 - Field `createdBy: "terminalId"` registra el origen
 
-**Activación (Ambos dispositivos)**:
+**Activación (Ambos dispositivos — BIDIRECCIONAL con Firestore listener v4.1)**:
 - Cuando llega la hora: Alarma SUENA EN TERMINAL Y EN MONITOR
 - Terminal ve UI con botón "Detener"
 - Monitor recibe notificación con botón "Detener"
 - **Con que UNO presione "Detener"** → Alarma se apaga EN AMBOS dispositivos
+- **NUEVO v4.1 — Firestore real-time listener para sync bidireccional**: Ambos dispositivos escuchan cambios en la colección de alarmas via `addSnapshotListener`. Cuando Monitor crea/modifica/detiene alarma → Terminal la recibe en tiempo real via Firestore listener (incluso si no están en la misma red WiFi). Cuando Terminal detiene alarma localmente → actualiza Firestore → Monitor recibe cambio via listener.
+- **LOCAL-FIRST**: Si están en misma red WiFi, TAMBIÉN enviar comando HTTP POST `/command` con action `stop_alarm` para respuesta inmediata. Firestore actúa como fallback cross-network.
 - Sync offline: Si Terminal está offline cuando Monitor detiene alarma, se sincroniza al reconectar
 
 **Acceso de Monitors Múltiples** (Arquitectura 1:N):
@@ -480,13 +524,13 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 ## 🎮 ESPECIFICACIÓN DE BOTONES Y NAVEGACIÓN (Agregado Marzo 20)
 
 ### Llamadas Telefónicas - Audio Call (WALKIE-TALKIE, SIN INTERFAZ VISUAL)
-- **Activación**: Presionar botón "Llamar" desde notificación expandida o interfaz principal (MonitorMainActivity)
+- **Activación**: Presionar botón "Llamar" desde TerminalDetailActivity (pantalla de detalle de Terminal pareado en Monitor)
 - **Comportamiento**: La llamada inicia **AUTOMÁTICAMENTE** sin pantalla intermedia, tipo walkie-talkie
-- **Cambio Visual**: Botón "Llamar" se convierte en "Colgar" (rojo, 48dp x 48dp) en la MISMA interfaz
-- **Ubicación del Botón Colgar**: Bottom-center (donde estaba el botón Llamar)
+- **Cambio Visual**: Botón "Llamar" se convierte en "Colgar" (rojo, 48dp x 48dp) en TerminalDetailActivity
+- **Ubicación del Botón Colgar**: En la misma card de acciones (donde estaba el botón Llamar)
 - **Comunicación**: Voz bidireccional vía WiFi local (fallback internet) - SIN video, SIN interfaz visual
 - **Duración**: Activa hasta presionar "Colgar"
-- **Return**: Presionar "Colgar" → Vuelve al estado normal de MonitorMainActivity
+- **Return**: Presionar "Colgar" → Vuelve al estado normal de TerminalDetailActivity
 - **Micrófono**: ACTIVADO por defecto (usuario escucha al Terminal)
 - ⚠️ **NO crear pantalla separada** - No hay Activity, Fragment ni Layout para llamadas de audio
 - ⚠️ **NO usar AudioCallActivity** - La clase existe como componente interno sin UI, gestionada por CallManager
@@ -524,10 +568,67 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 ---
 
 ### Botón "Llamar" - Llamada Telefónica a Terminal Emparejado
-- **Activación**: Presionar botón "Llamar" desde interfaz principal
+- **Activación**: Presionar botón "Llamar" desde TerminalDetailActivity (tras seleccionar terminal en DashboardFragment)
 - **Comportamiento**: Inicia llamada automáticamente al Terminal emparejado (sin diálogo de confirmación)
 - **Cambio Visual**: Botón "Llamar" se convierte en "Colgar" (rojo) hasta finalizar llamada
 - ⚠️ **NOTA 1:N**: Actualmente en pareja 1:1. En futuro (N>1), llamará al Terminal actualmente seleccionado
+
+---
+
+### 📱 TerminalDetailActivity — Pantalla de Detalle de Terminal (NUEVO v4.1 — Abril 2, 2026)
+
+> **NOTA**: Esta pantalla es del lado MONITOR. Muestra detalle de UN terminal pareado y permite controlarlo.
+
+**Contexto**: Monitor toca un terminal en DashboardFragment → abre TerminalDetailActivity
+**Layout**: `activity_terminal_detail.xml`
+**Intent Extras recibidos**: `terminal_name` (String), `terminal_status` (String), `terminal_id` (String)
+
+| # | Elemento | Tipo | Función |
+|---|----------|------|---------|
+| 1 | Toolbar | Toolbar | Título = nombre del terminal, botón back |
+| 2 | tvTerminalName | TextView | Nombre del terminal pareado |
+| 3 | tvTerminalStatus | TextView | "🟢 Activo • Batería: X%" o "🔴 Desconectado" |
+| 4 | btnCall + tvCallLabel + ivCallIcon | Card clickeable | Walkie-talkie: "Llamar" (teal) ↔ "Colgar" (rojo) |
+| 5 | btnMonitor | Card clickeable | Lanza VideoActivity en modo "monitor" |
+| 6 | tvServiceStatusIndicator | TextView | "✅ Conectado" / "⚠️ Conexión perdida" |
+| 7 | switchBellMode | Switch | ON/OFF campana en Terminal remoto |
+| 8 | switchShakeDetection | Switch | ON/OFF detección de agitación |
+| 9 | switchVoiceDetection | Switch | ON/OFF detección de voz |
+| 10 | switchAlarms | Switch | ON/OFF alarmas |
+
+**Comunicación HTTP con Terminal (puerto 8080)**:
+| Endpoint | Método | Cuándo | Body |
+|----------|--------|--------|------|
+| `/status` | GET | Poll cada 5s (backoff exponencial en fallo) | — |
+| `/command` | POST | Switch toggled | `{"command":"SET_BELL_MODE_ON"}` etc. |
+| `/command` | POST | Colgar llamada | `{"command":"STOP_AUDIO_CALL"}` |
+| `/request_call` | POST | Iniciar llamada | `source=monitor` |
+
+**Comandos disponibles via `/command`**:
+- `SET_BELL_MODE_ON` / `SET_BELL_MODE_OFF`
+- `SET_SHAKE_ON` / `SET_SHAKE_OFF`
+- `SET_VOICE_ON` / `SET_VOICE_OFF`
+- `SET_ALARMS_ON` / `SET_ALARMS_OFF`
+- `STOP_AUDIO_CALL`
+- `STOP_MONITOR` — T86: detiene video streaming desde CampanaService
+- `STOP_SESSION` — T86: detiene video streaming desde CampanaService
+
+**Walkie-talkie (llamada audio in-place)**:
+1. Verifica permiso `RECORD_AUDIO` → solicita si falta (requestCode 3001)
+2. HTTP POST `/request_call` al Terminal
+3. Crea `CallManager(ip, 9050)` y llama `startCall()` — T87: puerto cambiado de 5060 a 9050
+4. UI cambia: "Llamar"→"Colgar", icono teal→rojo
+5. Escribe `call_history` en Firestore (caller_id, receiver_id, start_time, call_type="voice", status="in_progress")
+6. Al colgar: HTTP POST `/command` con `STOP_AUDIO_CALL` + `callManager.stopCall()` + actualiza Firestore (end_time, status="completed")
+7. **Llamada in-place**: NO abre Activity separada, audio corre mientras TerminalDetailActivity está visible
+
+**Polling y reconexión**:
+- Poll normal: 5s. En fallo: backoff exponencial 5s→10s→30s→60s
+- Tras >5 min fallos: "⚠️ Conexión perdida" (rojo)
+- Tras 6+ fallos locales: verifica internet disponible → fallback a connectionType "internet"
+- Al recuperar local: vuelve a connectionType "local"
+
+**Guard flag `isUpdatingFromServer`**: Cuando el poll `/status` actualiza switches programáticamente, este flag previene que los listeners de switches envíen comandos HTTP redundantes al Terminal.
 
 ---
 
@@ -641,11 +742,11 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 └─────────────────────────────┘
 ```
 
-#### 2️⃣ **Layout: layout_adulto_mayor.xml - SOLO PARA HOME (Actividad Normal)**
+#### 2️⃣ **~~Layout: layout_adulto_mayor.xml~~ — NO EXISTE EN CÓDIGO**
 
-**Contexto**: Cuando Terminal está desbloqueado y usuario abre la app
+> ⚠️ **NOTA**: Este layout fue planificado pero NUNCA implementado. La pantalla principal del Terminal usa `TerminalMainActivity` con `fragment_terminal_qr.xml` (QR centrado + switches de servicios). La funcionalidad descrita aquí está distribuida entre TerminalMainActivity (DrawerLayout + toolbar) y TerminalQRFragment (QR + switches).
 
-**Componentes**:
+**Implementación real — TerminalMainActivity + TerminalQRFragment**:
 - **Botón Campana**: 96dp x 96dp, centrado
 - **Botón Menú (Hamburguesa)**: 48dp x 48dp, **TOP-RIGHT corner** (16dp margin), teal #008B8B
 - **Drawer**: 250-300dp width, teal background, contains:
@@ -804,7 +905,7 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 **Fase 2: Establecimiento de Conexión - QR VERIFICADO, Prioridad Local**
 1. Ambos dispositivos (YA emparejados) intentan conectar:
    - **PASO 1A: Detección Local (3s timeout)**
-     - Monitor descubre Terminal en red local (mDNS broadcast: `_monitor._tcp.local`)
+     - Monitor descubre Terminal en red local (mDNS broadcast: `_caremonitor._tcp`)
      - Si Terminal responde: Verificar token QR guardado contra registro local
      - Si token VÁLIDO → Establecer conexión WiFi local (puertos 8080/9000/9001)
    - **PASO 1B: Si Local Falla → Fallback a Internet (15s timeout)**
@@ -858,12 +959,14 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 - Permite forzar re-emparejamiento sin reset completo
 - Token QR tiene expiración configurable (default: 30 días)
 
-### Flujo de Alerta y Notificación
+### Flujo de Alerta y Notificación (ACTUALIZADO v4.2 — Abril 2, 2026 — BUBBLES)
 1. Activación vía toque (Bell icon), voz (Voice commands), o agitación (Shake sensor - when enabled in settings) en Terminal.
-2. Monitor recibe notificación "Campana • ahora" (expandible bajo demanda).
-3. Acumulación en una sola notificación con eventos y timestamps.
-4. Expandir para mostrar botones: "Llamar", "Monitorear", "Limpiar".
-5. Limpiar el historial colapsa la notificación.
+2. Monitor recibe alerta como **burbuja flotante per-terminal** (API 30+). En API <30, las alertas se acumulan exclusivamente en la notificación del servicio (ID=1).
+3. Cada terminal pareado = 1 burbuja independiente. Alertas se acumulan dentro de su burbuja (badge count).
+4. Expandir burbuja → abre **BubbleRadialActivity** con menú radial animado: hub central (nombre terminal + última alerta + badge) + 3 opciones (Monitorear, Llamar, Controles) que emergen radialmente.
+5. Tocar opción radial → acción en pantalla completa: VideoActivity (Monitorear), TerminalDetailActivity con auto_call (Llamar), o TerminalDetailActivity completa (Controles).
+6. Notificación de servicio (ID=1, notification_custom.xml) sigue mostrando historial FIFO global (máx 10). Esta es la ÚNICA notificación visible en API <30.
+7. API <30: NO se crea notificación extra. La notificación del servicio ya contiene todas las alertas acumuladas.
 
 ### Flujo de Llamada Telefónica (Walkie-talkie)
 1. Monitor presiona "Llamar" desde notificación o interfaz principal.
@@ -872,20 +975,20 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 4. Monitor presiona "Colgar" para terminar (botón cambia dinámicamente).
 5. NO se abre ninguna Activity separada - todo ocurre en la misma interfaz.
 
-### Flujo de Monitoreo Silencioso (ESPECIFICACIÓN COMPLETA - Marzo 27 - UI UPDATE)
-1. Monitor presiona "Monitorear" desde notificación o interfaz.
-2. Captura silenciosa de cámara y micrófono del Terminal.
-3. Monitor ve video en vivo con **3 botones solo-icono (sin texto)** en barra inferior:
+### Flujo de Monitoreo Silencioso (ESPECIFICACIÓN COMPLETA - Marzo 27 - UI UPDATE - T86 ARCH FIX)
+1. Monitor presiona "Monitorear" desde notificación, burbuja, o interfaz.
+2. Monitor abre VideoActivity con mode="monitor" → envía HTTP POST `/request_monitor` al Terminal.
+3. **Terminal: CampanaService.onMonitorRequested()** → crea VideoManager directamente en el Service (T86 — NO lanza Activity en Terminal). Streaming de cámara vía UDP:9001 hacia Monitor.
+4. Monitor ve video en vivo con **3 botones solo-icono (sin texto)** en barra inferior:
    - **Botón Cambiar Cámaras**: Alterna entre cámara frontal/trasera del Terminal
    - **Botón Alternar Modo**: Toggle que cambia entre:
      - 🔇 "Modo Monitoreo Silencioso" (solo recibiendo video/audio, sin transmisión del Monitor)
      - 📹 "Modo Videollamada Bidireccional" (video+audio bidireccional activo)
-   - **Botón Salir**: Cierra VideoActivity
-4. **Terminal: Operación silenciosa** (sin notificación, sin sonido, sin vibración, sin indicador visual)
-   - App ejecuta en background sin alertas durante monitoreo silencioso
-5. Cuando se alterna a "Videollamada Bidireccional": Terminal recibe automáticamente llamada videollamada
-6. Monitor presiona "Salir" para terminar monitoreo.
-7. **Logging**: Evento registrado en Firestore (ver sección Firestore Schema)
+   - **Botón Salir**: Cierra VideoActivity y envía STOP_MONITOR al Terminal
+5. **Terminal: Operación silenciosa** — CampanaService hace streaming en background sin UI, sin notificación extra, sin sonido
+6. Cuando se alterna a "Videollamada Bidireccional": Terminal recibe automáticamente llamada videollamada
+7. Monitor presiona "Salir" para terminar monitoreo → Terminal recibe STOP_MONITOR → VideoManager.stopStreaming()
+8. **Logging**: Evento registrado en Firestore (ver sección Firestore Schema)
 
 ---
 
@@ -910,9 +1013,8 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 **REGLA #3 - Detección de Red**:
 - Detectar si Terminal y Monitor en misma red:
   ```
-  - Monitor obtiene Terminal IP vía mDNS ("_monitor._tcp.local")
-  - Terminal obtiene Monitor IP vía mDNS ("_terminal._tcp.local")
-  - Si ambos resuelven en misma subnet → Red Local
+  - Ambos dispositivos usan mDNS con tipo "_caremonitor._tcp" (LocalDiscoveryService)
+  - Si se resuelve en misma subnet → Red Local
   - Si no resuelven → Internet
   ```
 - Ejecutar detección cada 30 segundos en background (bajo consumo batería)
@@ -977,37 +1079,21 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 }
 ```
 
-**Subcolección 1A: `/users/{monitorId}/emparejamientos/{terminalId}`** (Monitor → MUCHOS Terminales)
+**Colección Top-Level: `/pairings/{documentId}`** (REAL — código usa `db.collection("pairings")`)
 ```json
 {
+  "monitorId": "google_123456",
   "terminalId": "google_654321",
-  "terminalNombre": "María",
+  "name": "María",              // Nombre del Terminal para display
   "terminalPublicKey": "...",
   "pairingToken": "hash_qr_...",
   "pairedAt": timestamp,
   "connectionType": "local" | "internet",
   "lastSeen": timestamp,
-  "isActive": true  // Siempre true para relaciones activas
+  "isActive": true
 }
 ```
-
-**Subcolección 1B: `/users/{terminalId}/emparejamientos/actual`** (Terminal → 1 Monitor Actual)
-```json
-{
-  "monitorId": "google_123456",
-  "monitorNombre": "Juan",
-  "monitorPublicKey": "...",
-  "pairingToken": "hash_qr_...",
-  "pairedAt": timestamp,
-  "pairedBy": "qr_scan", // Histórico de cómo se emparejó
-  "connectionType": "local" | "internet",
-  "isActive": true,
-  "historialPrior": [ // Opcionalhistorial de Monitors anteriores
-    { "monitorId": "...", "unpairedAt": timestamp },
-    ...
-  ]
-}
-```
+> ⚠️ **NOTA**: SRS anterior decía `/users/{monitorId}/emparejamientos/`. La implementación real usa colección top-level `pairings` consultada por `ConnectionViewModel.getPairingsList()` con filter `where("monitorId", ==, currentUserId)`. Esto simplifica las queries y evita subcolecciones anidadas.
 
 **Subcolección: `/users/{userId}/logs_conexion/{eventId}`**
 ```json
@@ -1121,7 +1207,31 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 - Notificación se colapsa después de limpiar
 - Reaparece cuando llega nuevo evento
 
+### Notificaciones Per-Terminal con Bubbles API (NUEVO v4.2 — Abril 2, 2026)
+
+**Arquitectura**: 1 Monitor : N Terminales → N Burbujas independientes.
+
+| Aspecto | Comportamiento |
+|---------|----------------|
+| API 30+ (Android 11+) | Cada terminal = 1 burbuja flotante. Expandir → **BubbleRadialActivity** (menú radial: Monitorear, Llamar, Controles) |
+| API 24-29 | Sin burbuja. Alertas se acumulan exclusivamente en la notificación del servicio (ID=1). Acceso a terminal vía Dashboard |
+| Menú radial | Hub central (nombre + alerta + badge) + 3 botones 72dp emergen radialmente con animación OvershootInterpolator 500ms |
+| Opciones radiales | Monitorear (📹, 90° arriba) → VideoActivity, Llamar (📞, 210° abajo-izq) → TerminalDetailActivity(auto_call), Controles (⚙️, 330° abajo-der) → TerminalDetailActivity |
+| Acumulación | Alertas del MISMO terminal se acumulan en SU burbuja. Título: "🔔 Campana (+N más)" |
+| Primera alerta | Burbuja se auto-expande |
+| Alertas subsiguientes | Burbuja se actualiza silenciosamente (no interrumpe) |
+| Componente bubble | `TerminalBubbleManager.kt` (singleton) — maneja ShortcutInfo, Person, BubbleMetadata por terminal |
+| Componente radial | `BubbleRadialActivity.kt` + `activity_bubble_radial.xml` — Activity liviana con menú radial animado |
+| Canal | ALERT_CHANNEL_ID con `setAllowBubbles(true)` (API 29+) |
+| Manifest | BubbleRadialActivity: `allowEmbedded=true`, `resizeableActivity=true`, `documentLaunchMode=always` |
+| ID notificación | `BUBBLE_NOTIFICATION_ID_BASE (200) + terminalId.hashCode().and(0xFF)` — único por terminal |
+| Coexistencia | Service notification (ID=1, notification_custom.xml) sigue existiendo independientemente con historial FIFO global |
+
+**Resolución de nombre**: Si la alerta llega con IP en vez de nombre, `resolveTerminalName()` busca en SharedPreferences `paired_terminal_name`. Fallback: "Terminal (X.X.X.X)".
+
 ### Interfaz de Notificaciones - DISEÑO DUAL (UPDATED March 27, 2026)
+
+**NOTA v4.2**: El diseño dual descrito abajo aplica a la **notificación de servicio** (ID=1). Las alertas per-terminal ahora usan Bubbles (ver sección anterior).
 
 **Estado COLAPSADO (Minimalista - Collapsed View)**:
 - Mostrar: **SOLO 3 elementos** (nada más):
@@ -1223,10 +1333,10 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 | # | Elemento | Tipo | Función |
 |---|----------|------|---------|
 | 1 | Camera Preview | PreviewView (fullscreen) | Vista de cámara TRASERA |
-| 2 | Overlay Frame | View (cuadrado 250dp) | Marco visual de escaneo (centro) |
+| 2 | Overlay Frame | View (cuadrado 200dp) | Marco visual de escaneo (centro) |
 | 3 | Instrucciones | TextView (16sp, blanco) | "Apunta la cámara al QR del Terminal" |
 | 4 | Botón Cerrar | ImageButton (48dp, TOP-LEFT) | Flecha ← para volver |
-| 5 | Flash Toggle | ImageButton (48dp, TOP-RIGHT) | Encender/apagar flash |
+| ~~5~~ | ~~Flash Toggle~~ | ~~No implementado~~ | No existe en código actual |
 
 **Comportamiento**:
 - Usar CameraX con `CameraSelector.DEFAULT_BACK_CAMERA`
@@ -1255,7 +1365,7 @@ Monitor de Cuidados es una aplicación dual-rol diseñada para el cuidado y moni
 - Al seleccionar: Guardar rol en SharedPreferences + Firestore (`/users/{userId}/rol`)
 - NO cierra sesión de Firebase al cambiar rol
 - NO muestra diálogo de confirmación
-- Navega directamente a MonitorMainActivity o TerminalConfigActivity según selección
+- Navega directamente a MonitorMainActivity o TerminalMainActivity según selección
 - Si viene de onboarding (primer uso): flujo lineal
 - Si viene de "Cambiar Modo": Cierra conexiones activas de video/audio, luego navega
 
@@ -1432,7 +1542,7 @@ A feature is **COMPLETE** when ALL acceptance criteria are met and verified. The
 ### DUAL-ROLE SYSTEM (Monitor + Terminal)
 **AC-2.1**: RoleSelectorActivity allows switching between Monitor and Terminal
 - [ ] Button "Monitor" → app loads MonitorMainActivity
-- [ ] Button "Terminal" → app loads TerminalConfigActivity
+- [ ] Button "Terminal" → app loads TerminalMainActivity
 - [ ] Selection persists in SharedPreferences
 - [ ] Sesión de Firebase se MANTIENE (NO se cierra sesión)
 - [ ] "Cambiar Modo" navega a RoleSelectorActivity SIN diálogo de confirmación
@@ -1642,11 +1752,13 @@ A feature is **COMPLETE** when ALL acceptance criteria are met and verified. The
 
 ### Implementación 1:N
 
-**Almacenamiento**:
-- **SharedPreferences local**: Guardado EXCLUSIVAMENTE en dispositivo local (idioma seleccionado)
-- **Firestore**: StringsLocalizationManager carga traducciones dinámicamente desde `/localization/{language}/{string_key}`
+**Almacenamiento (LOCAL-FIRST — ACTUALIZADO v4.1)**:
+- **SharedPreferences local**: Idioma seleccionado guardado en dispositivo
+- **Firestore**: StringsLocalizationManager descarga traducciones desde `/localization/{language}/{string_key}` al seleccionar idioma
+- **Cache local**: Una vez descargado, el idioma se persiste localmente y funciona SIN internet
+- **Español por defecto**: Si Firestore no disponible Y no hay cache descargada → usar strings.xml embebidos (Spanish)
+- **Estado actual de traducciones**: Las traducciones aún NO están subidas a Firestore para todos los idiomas. Necesita upload manual de key-value pairs para EN, FR, PT, DE, IT
 - **Razón**: Terminal es dispositivo personal del usuario cuidado. Idioma es preferencia local, no del Monitor
-- **Fallback**: Si Firestore no disponible, StringsLocalizationManager usa local strings.xml (Spanish)
 
 **Sincronización**:
 - ❌ NO sincronizar idioma entre dispositivos emparejados
@@ -1829,24 +1941,23 @@ A feature is **COMPLETE** when ALL acceptance criteria are met and verified. The
 - ❌ Requiere gesto de arrastre: Difícil con movilidad reducida
 - ❌ Contenido invisible: No saben qué opciones existen
 
-#### AHORA (v2): Bottom Navigation + NavigationDrawer simplificado
+#### AHORA (v2 — IMPLEMENTACIÓN REAL): DrawerLayout + Toolbar con bell toggle
 
-**Monitor — BottomNavigationView (3 tabs + drawer para secundarios)**:
-| Tab | Ícono | Label | Destino |
-|-----|-------|-------|---------|
-| 1 | 🏠 Home | "Inicio" | Dashboard principal: alertas + acciones rápidas |
-| 2 | 📋 Historial | "Historial" | AlertLogActivity (consolidado 1:N) |
-| 3 | ⚙️ Config | "Ajustes" | SettingsActivity |
+> ⚠️ **NOTA IMPORTANTE**: El diseño v2 original planificaba BottomNavigationView pero la implementación real usa **DrawerLayout + Toolbar**. Esta sección refleja el código real.
 
-- Drawer (menú lateral) conserva: Cambiar Modo, Cerrar Sesión, Acerca de
-- Drawer accesible via ícono hamburguesa en top-left 48dp
-- **Resultado**: Las 3 funciones principales siempre visibles, 1 tap
+**Monitor — DrawerLayout + Toolbar (implementación actual)**:
+- **Toolbar**: título "Monitor de Cuidados" + botón campana (bell toggle) que alterna Dashboard ↔ HistoryFragment
+- **DrawerLayout**: NavigationView con items: Cambiar Modo, Ajustes, Acerca de, Cerrar Sesión
+- **Drawer Header (nav_header_main.xml)**: headerTitle = nombre del usuario Monitor (Firebase displayName o Build.MODEL), headerEmail = email del usuario
+- **Fragment Container**: frame_container aloja DashboardFragment (default) o HistoryFragment
+- **Resultado**: Acciones principales accesibles via toolbar + drawer
 
-**Terminal — Pantalla Única Ultra-Simplificada (NO tabs, NO drawer en vista diaria)**:
-- Terminal NO necesita navegación — solo tiene 1 pantalla de uso diario
-- Acceso a configuración: Botón "⚙️" en esquina superior-derecha (56dp)
-- Cambiar modo: Solo desde Settings → opción al fondo
-- **Resultado**: Elderly person ve SOLO lo esencial, sin confusión
+**Terminal — DrawerLayout + QR centrado (implementación actual)**:
+- **Toolbar**: ☰ hamburguesa + título "Monitor de Cuidados"
+- **DrawerLayout**: NavigationView con items: Cambiar Modo, Ajustes, Acerca de, Cerrar Sesión
+- Terminal USA drawer, contrario al diseño v2 original que planificaba sin drawer
+- **Contenido**: TerminalQRFragment con QR centrado + switches de servicios debajo
+- **Resultado**: Consistencia de navegación con Monitor, adulto mayor accede a opciones si necesita
 
 ---
 
@@ -1857,8 +1968,8 @@ A feature is **COMPLETE** when ALL acceptance criteria are met and verified. The
 #### Pantalla Principal Terminal (USO DIARIO)
 
 ```
-┌──────────────────────────────────────┐
-│ ⚙️                    🟢 Conectado    │  ← Status bar: config (56dp) + estado
+(┌──────────────────────────────────────┐
+│                      🟢 Conectado    │  ← Status bar: config (56dp) + estado
 │                                      │
 │                                      │
 │                                      │
@@ -1872,8 +1983,8 @@ A feature is **COMPLETE** when ALL acceptance criteria are met and verified. The
 │                                      │
 │                                      │
 │                                      │
-│  Estado: Último evento hace 5 min    │  ← Info mínima: último evento
-│  🔋 85%  📶 WiFi conectado          │  ← Battery + connection status
+│                                      │
+│                                      │
 └──────────────────────────────────────┘
 ```
 
@@ -1885,18 +1996,9 @@ A feature is **COMPLETE** when ALL acceptance criteria are met and verified. The
    - Feedback al tocar: vibración 200ms + sonido de confirmación + animación ripple + texto cambia a "✓ Enviado"
    - Revert: Vuelve a estado normal después de 3 segundos
    
-2. **Status Bar** (top, 56dp):
-   - Izquierda: Botón ⚙️ configuración (56dp × 56dp, sutil, #555555)
-   - Derecha: Indicador conexión (🟢 Conectado / 🔴 Desconectado / 🟡 Reconectando)
-   - El botón ⚙️ es intencionalmente pequeño y discreto para evitar que el adulto mayor entre accidentalmente a configuración
-
-3. **Info Strip** (bottom, 48dp):
-   - Último evento: "Último evento hace 5 min" (16sp)
-   - Batería: "🔋 85%" (16sp)
-   - Conexión: "📶 WiFi" (16sp)
 
 4. **Logo/Nombre** (debajo de status bar, centrado):
-   - "Monitor de Cuidados" (18sp, #555555, solo decorativo)
+   - "Monitor de Cuidados" (18sp, #555555, solo decorativo))
 
 #### ¿Qué pasó con los Cards del Terminal v1?
 

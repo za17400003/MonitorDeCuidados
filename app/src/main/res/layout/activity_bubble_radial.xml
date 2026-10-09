@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:padding="16dp">
+
+    <!-- Punto de anclaje central (invisible) -->
+    <View
+        android:id="@+id/hubCenter"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Hub visual central -->
+    <LinearLayout
+        android:id="@+id/hubContainer"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/bg_circle_teal"
+        android:padding="8dp"
+        android:contentDescription="@string/cd_terminal_info_bubble"
+        app:layout_constraintCircle="@id/hubCenter"
+        app:layout_constraintCircleRadius="0dp"
+        app:layout_constraintCircleAngle="0">
+
+        <TextView
+            android:id="@+id/tvBubbleName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="@color/white"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/tvBubbleAlert"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="9sp"
+            android:textColor="@color/white"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/tvBubbleBadge"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:gravity="center"
+            android:textSize="10sp"
+            android:textColor="@color/white"
+            android:background="@drawable/bg_badge_red"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Botón MONITOREAR (arriba, 0° en ConstraintLayout = top) -->
+    <LinearLayout
+        android:id="@+id/btnRadialMonitor"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="@drawable/bg_circle_teal"
+        android:padding="8dp"
+        android:contentDescription="@string/cd_monitor_button"
+        app:layout_constraintCircle="@id/hubCenter"
+        app:layout_constraintCircleRadius="100dp"
+        app:layout_constraintCircleAngle="0">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ic_monitor_video"
+            android:contentDescription="@null" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvLabelMonitor"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/monitor_video_button"
+        android:textSize="11sp"
+        android:textColor="@color/text_primary"
+        app:layout_constraintTop_toBottomOf="@id/btnRadialMonitor"
+        app:layout_constraintStart_toStartOf="@id/btnRadialMonitor"
+        app:layout_constraintEnd_toEndOf="@id/btnRadialMonitor"
+        android:layout_marginTop="2dp" />
+
+    <!-- Botón LLAMAR (abajo-izquierda, 240° CL) -->
+    <LinearLayout
+        android:id="@+id/btnRadialCall"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="@drawable/bg_circle_teal"
+        android:padding="8dp"
+        android:contentDescription="@string/cd_call_button"
+        app:layout_constraintCircle="@id/hubCenter"
+        app:layout_constraintCircleRadius="100dp"
+        app:layout_constraintCircleAngle="240">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ic_call_up"
+            android:contentDescription="@null" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvLabelCall"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/call_button"
+        android:textSize="11sp"
+        android:textColor="@color/text_primary"
+        app:layout_constraintTop_toBottomOf="@id/btnRadialCall"
+        app:layout_constraintStart_toStartOf="@id/btnRadialCall"
+        app:layout_constraintEnd_toEndOf="@id/btnRadialCall"
+        android:layout_marginTop="2dp" />
+
+    <!-- Botón CONTROLES (abajo-derecha, 120° CL) -->
+    <LinearLayout
+        android:id="@+id/btnRadialControls"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="@drawable/bg_circle_teal"
+        android:padding="8dp"
+        android:contentDescription="@string/cd_settings_button"
+        app:layout_constraintCircle="@id/hubCenter"
+        app:layout_constraintCircleRadius="100dp"
+        app:layout_constraintCircleAngle="120">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ic_settings"
+            android:contentDescription="@null" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvLabelControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/controls_button"
+        android:textSize="11sp"
+        android:textColor="@color/text_primary"
+        app:layout_constraintTop_toBottomOf="@id/btnRadialControls"
+        app:layout_constraintStart_toStartOf="@id/btnRadialControls"
+        app:layout_constraintEnd_toEndOf="@id/btnRadialControls"
+        android:layout_marginTop="2dp" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
